@@ -1,0 +1,70 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:transparent;overflow:hidden;font-family:"Segoe UI",system-ui,sans-serif;user-select:none}
+#w{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding:6px 14px 18px}
+#bubble{width:100%;max-height:250px;overflow:auto;background:#f1cfd0;color:#3a2bd6;border-radius:26px;padding:14px 20px;font-size:20px;font-weight:600;line-height:1.35;margin-bottom:18px;box-shadow:0 8px 30px #0008;transition:opacity .25s,transform .25s}
+#bubble.hide{opacity:0;transform:translateY(10px)}#bubble .me{color:#7a6be0;font-weight:500;font-size:15px;margin-bottom:4px}
+#orb{position:relative;width:120px;height:120px;flex:none;border-radius:50%;background:radial-gradient(circle at 50% 45%,#0c1330,#04060d 72%);box-shadow:0 0 0 2px #ffffff14,0 0 46px #4d7dff77;overflow:hidden;transform:scale(var(--s,1));transition:transform .08s}
+.p{position:absolute;left:50%;top:50%;width:90%;height:58%;margin:-29% 0 0 -45%;border-radius:50%;filter:blur(7px);mix-blend-mode:screen;opacity:.92;animation:r var(--d) linear infinite}
+.p:nth-child(1){background:radial-gradient(closest-side,#7dffd8,transparent);--d:6s}
+.p:nth-child(2){background:radial-gradient(closest-side,#ff5fa8,transparent);--d:8s;animation-direction:reverse;transform:rotate(60deg)}
+.p:nth-child(3){background:radial-gradient(closest-side,#5a8bff,transparent);--d:5s}
+.p:nth-child(4){background:radial-gradient(closest-side,#b56bff,transparent);--d:7s;animation-direction:reverse}
+#core{position:absolute;inset:34%;border-radius:50%;background:radial-gradient(#fff,#fff0 70%);filter:blur(6px);opacity:.75;animation:g 2.4s ease-in-out infinite}
+@keyframes r{from{rotate:0deg}to{rotate:360deg}}@keyframes g{50%{opacity:1;transform:scale(1.25)}}
+body.thinking .p{animation-duration:1.6s}body.speaking #orb{animation:sp .7s ease-in-out infinite}@keyframes sp{50%{transform:scale(1.13)}}
+</style></head><body class="idle"><div id="w"><div id="bubble" class="hide"></div><div id="orb"><div class="p"></div><div class="p"></div><div class="p"></div><div class="p"></div><div id="core"></div></div></div>
+<script>
+const $=id=>document.getElementById(id),B=$("bubble"),sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let C={},voices=[],stream,ac,an,buf,cmdReq=false,busy=false,hideT,lv=0,shown=false,typer;
+const cls=s=>document.body.className=s;
+function show(){clearTimeout(hideT);if(!shown){shown=true;P.ov(true)}}
+function hideLater(ms=5500){clearTimeout(hideT);hideT=setTimeout(()=>{shown=false;B.classList.add("hide");cls("idle");P.ov(false)},ms)}
+function text(me,t){B.classList.remove("hide");B.innerHTML="";if(me){const a=document.createElement("div");a.className="me";a.textContent=me;B.append(a)}const d=document.createElement("div");d.textContent=t||"";B.append(d);return d}
+async function mic(){if(stream&&stream.active)return true;
+  try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});ac=new AudioContext();const s=ac.createMediaStreamSource(stream);an=ac.createAnalyser();an.fftSize=512;s.connect(an);buf=new Uint8Array(512);return true}catch{return false}}
+function level(){an.getByteTimeDomainData(buf);let s=0;for(const v of buf)s+=((v-128)/128)**2;return Math.sqrt(s/buf.length)}
+(function f(){document.getElementById("orb").style.setProperty("--s",shown&&document.body.className==="listening"?1+Math.min(lv*4,.3):1);requestAnimationFrame(f)})();
+function record(wake){return new Promise(res=>{
+  const mr=new MediaRecorder(stream,{mimeType:"audio/webm;codecs=opus"}),ch=[];let spoke=false,q=0,sp=0,t0=Date.now();
+  mr.ondataavailable=e=>ch.push(e.data);mr.start();
+  const iv=setInterval(()=>{const r=level();lv=r;if(r>.035){spoke=true;q=0;sp+=50}else if(spoke)q+=50;const el=Date.now()-t0;
+    if(wake&&!spoke&&el>4000){clearInterval(iv);mr.onstop=()=>res("again");mr.stop();return}
+    if((spoke&&q>1000)||(spoke&&el>15000)||(!wake&&!spoke&&el>7000)){clearInterval(iv);mr.onstop=()=>res(spoke&&sp>=300?new Blob(ch,{type:"audio/webm"}):null);mr.stop()}},50)})}
+async function main(){
+  if(busy)return;busy=true;
+  while(true){
+    if(!C.key||(!C.wake&&!cmdReq))break;
+    if(!await mic()){text("","Allow the microphone for Paru.");show();hideLater(6000);break}
+    const wake=!cmdReq;cmdReq=false;
+    if(!wake){show();text("","");cls("listening")}
+    const seg=await record(wake);
+    if(seg==="again")continue;
+    if(!seg){if(!wake){text("","I didn't hear anything.");hideLater(2500)}continue}
+    if(!wake){cls("thinking")}
+    const r=await P.api("/voice/audio?lang="+C.lang+"&wake="+(wake?1:0),"POST",await seg.arrayBuffer(),"audio/webm");
+    if(r.error==="unreachable"||r.error){if(!wake){text("",r.error==="unreachable"?"I can't reach the agent.":"Wrong key. Open the Paru app → Settings.");hideLater(4000)}await sleep(wake?3000:0);continue}
+    if(wake&&r.mode==="offline")continue;
+    if(!r.text){if(!wake){text("","");hideLater(1500)}continue}
+    show();const d=text(r.heard,"");cls("thinking");
+    if(!await commands(r.heard||""))await speak(r.text,d);
+    if(r.text.trim()==="Yes?")cmdReq=true;else hideLater();
+  }
+  busy=false}
+async function commands(h){
+  const l=h.toLowerCase();let m=l.match(/(?:voice|குரல்)\s*(?:number|எண்)?\s*(\d+)/);
+  if(/(change|switch|next).*voice|குரல்.*மாற்று|அடுத்த குரல்/.test(l)||m){
+    const pool=voices.filter(v=>/^(en|ta)/i.test(v.lang));if(!pool.length)return false;
+    let i=pool.findIndex(v=>v.name===C.voice);i=m&&pool[+m[1]-1]?+m[1]-1:(i+1)%pool.length;
+    await P.setCfg({voice:pool[i].name});await speak("Voice "+(i+1)+", "+pool[i].name.replace(/Microsoft | Online \(Natural\)/g,""),text(h,""));return true}
+  m=l.match(/(?:open|launch)\s+(.{2,60})$/);
+  if(m){const t=m[1].replace(/[.!?]+$/,"").trim(),a=await P.act({target:t});await speak(a==="ok"?"Opening "+t:a==="denied"?"Okay, I won't.":"I can't open that.",text(h,""));return true}
+  return false}
+function speak(t,d){return new Promise(res=>{
+  cls("speaking");clearInterval(typer);const w=t.split(/\s+/);let i=0;
+  typer=setInterval(()=>{i++;d.textContent=w.slice(0,i).join(" ");B.scrollTop=1e9;if(i>=w.length)clearInterval(typer)},120);
+  const u=new SpeechSynthesisUtterance(t),ta=/[\u0B80-\u0BFF]/.test(t);u.lang=ta?"ta-IN":"en-IN";u.rate=1.05;
+  let v=voices.find(x=>x.name===C.voice);if(!v||(ta&&!/^ta/i.test(v.lang))||(!ta&&!/^en/i.test(v.lang)))v=voices.find(x=>x.lang.toLowerCase().startsWith(ta?"ta":"en"));if(v)u.voice=v;
+  u.onend=u.onerror=()=>{clearInterval(typer);d.textContent=t;cls("idle");res()};speechSynthesis.speak(u)})}
+(async()=>{C=await P.cfg();const gv=()=>voices=speechSynthesis.getVoices();gv();speechSynthesis.onvoiceschanged=gv;
+  P.onCfg(c=>{C=c;main()});P.onTalk(()=>{cmdReq=true;speechSynthesis.cancel();main()});main()})();
+</script></body></html>

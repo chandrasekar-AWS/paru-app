@@ -1,0 +1,42 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Paru</title><style>
+*{box-sizing:border-box}body{margin:0;height:100vh;display:flex;background:#14100f;color:#f3e9e6;font-family:"Segoe UI",system-ui,sans-serif}
+#side{width:200px;background:#1d1614;padding:18px 12px;display:flex;flex-direction:column;gap:6px}
+#logo{font-size:22px;font-weight:700;margin:0 8px 14px;background:linear-gradient(90deg,#7dffd8,#ff5fa8,#5a8bff);-webkit-background-clip:text;color:transparent}
+.t{background:none;border:0;color:#f3e9e6;text-align:left;padding:10px 12px;border-radius:12px;font-size:15px;cursor:pointer}.t.on,.t:hover{background:#ffffff14}
+#talk{margin-top:auto;padding:12px;border:0;border-radius:14px;background:linear-gradient(90deg,#5a8bff,#ff5fa8);color:#fff;font-size:15px;cursor:pointer}
+#main{flex:1;padding:24px;overflow:auto}.pg{display:none}.pg.on{display:block}h2{margin:0 0 14px}
+label{display:block;margin:12px 0 4px;font-size:13px;opacity:.75}input,select,textarea{width:100%;max-width:560px;padding:10px;border-radius:10px;border:1px solid #ffffff22;background:#241c1a;color:#fff;font-size:14px}
+textarea{height:340px;font-family:Consolas,monospace;font-size:12px;max-width:760px}
+button.b{margin:14px 8px 0 0;padding:10px 18px;border:0;border-radius:10px;background:#5a8bff;color:#fff;cursor:pointer;font-size:14px}button.g{background:#ffffff1f}
+.m{margin:0 0 10px;padding:10px 14px;border-radius:14px;background:#241c1a;max-width:760px}.m b{color:#7dffd8}.m.p b{color:#ff9ec8}.m small{opacity:.45;margin-left:8px}
+#st{font-size:12px;margin:0 8px 10px;opacity:.7}
+</style></head><body>
+<div id="side"><div id="logo">Paru</div><button class="t on" data-p="h">History</button><button class="t" data-p="s">Settings</button><button class="t" data-p="k">Keys</button><div id="st"></div><button id="talk">Talk to Paru</button></div>
+<div id="main">
+<div class="pg on" id="h"><h2>Our conversations</h2><div id="hl">Loading…</div><button class="b" id="hr">Refresh</button><button class="b g" id="hc">Clear history</button></div>
+<div class="pg" id="s"><h2>Settings</h2>
+<label>Agent address</label><input id="sv"><label>VOICE_KEY (your secret word)</label><input id="sk" type="password">
+<label>Agent folder (has agent.py)</label><input id="sd"><label>Language you speak</label><select id="sl"><option value="en">English</option><option value="ta">தமிழ் (Tamil)</option></select>
+<label>Listen for "hello Paru" all the time</label><select id="sw"><option value="1">On</option><option value="0">Off (use Ctrl+Shift+Space)</option></select>
+<label>Paru's voice (also: say "change voice" or "voice 3")</label><select id="vo"></select>
+<button class="b" id="ss">Save</button><button class="b g" id="vt">Test voice</button></div>
+<div class="pg" id="k"><h2>Keys (env.txt of the agent)</h2><p style="opacity:.7;max-width:640px;font-size:13px">Type your keys after each = sign. Only you can see this. Save restarts the agent.</p><textarea id="ke" spellcheck="false"></textarea><br><button class="b" id="ksv">Save and restart agent</button></div>
+</div>
+<script>
+const $=id=>document.getElementById(id);let C={};
+document.querySelectorAll(".t").forEach(b=>b.onclick=()=>{document.querySelectorAll(".t,.pg").forEach(x=>x.classList.remove("on"));b.classList.add("on");$(b.dataset.p).classList.add("on");if(b.dataset.p==="h")hist();if(b.dataset.p==="k")P.envRead().then(t=>$("ke").value=t)});
+$("talk").onclick=()=>P.talk();
+async function hist(){const r=await P.api("/voice/history");const b=$("hl");b.innerHTML="";
+  if(r.error){b.textContent=r.error==="unreachable"?"The agent isn't running yet. Wait a few seconds and press Refresh, or check Settings.":"Wrong VOICE_KEY. Open Settings.";return}
+  if(!r.items.length){b.textContent="No conversation yet. Say “hello Paru”.";return}
+  for(const i of r.items){const d=document.createElement("div");d.className="m"+(i.who==="You"?"":" p");const n=document.createElement("b");n.textContent=i.who+": ";const s=document.createElement("small");s.textContent=i.ts;d.append(n,i.text,s);b.append(d)}scrollTo(0,1e9)}
+$("hr").onclick=hist;$("hc").onclick=async()=>{if(confirm("Delete all saved conversation?")){await P.api("/voice/history/clear","POST","{}");hist()}};
+function voices(){const v=speechSynthesis.getVoices().filter(v=>/^(en|ta)/i.test(v.lang));$("vo").innerHTML="";v.forEach((x,i)=>{const o=document.createElement("option");o.value=x.name;o.textContent=(i+1)+". "+x.name+" ("+x.lang+")";$("vo").append(o)});$("vo").value=C.voice||""}
+async function load(){C=await P.cfg();$("sv").value=C.server;$("sk").value=C.key;$("sd").value=C.agentDir;$("sl").value=C.lang;$("sw").value=C.wake?"1":"0";voices();hist();ping()}
+async function ping(){const r=await P.api("/voice/history");$("st").textContent=r.error==="unreachable"?"● Agent offline":r.error?"● Wrong key":"● Agent online"}
+speechSynthesis.onvoiceschanged=voices;
+$("ss").onclick=async()=>{C=await P.setCfg({server:$("sv").value.trim(),key:$("sk").value.trim(),agentDir:$("sd").value.trim(),lang:$("sl").value,wake:$("sw").value==="1",voice:$("vo").value});alert("Saved.");ping()};
+$("vt").onclick=()=>{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance("Hello, I am Paru.");const v=speechSynthesis.getVoices().find(x=>x.name===$("vo").value);if(v)u.voice=v;speechSynthesis.speak(u)};
+$("ksv").onclick=async()=>{await P.envWrite($("ke").value);alert("Saved. The agent is restarting (about 10 seconds).");setTimeout(ping,9000)};
+P.onCfg(c=>{C=c});setInterval(ping,15000);load();
+</script></body></html>

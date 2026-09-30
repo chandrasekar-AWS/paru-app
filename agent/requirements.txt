@@ -1,0 +1,5 @@
+fastapi
+uvicorn
+httpx
+tzdata
+google-auth-oauthlib

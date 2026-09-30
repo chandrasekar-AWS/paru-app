@@ -1,0 +1,7 @@
+agent/env.txt
+agent/agent.db
+agent/*.log
+node_modules/
+dist/
+__pycache__/
+*.pyc
