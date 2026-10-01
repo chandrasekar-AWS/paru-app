@@ -1,70 +1,99 @@
 <!doctype html><html><head><meta charset="utf-8"><style>
 *{box-sizing:border-box}html,body{margin:0;height:100%;background:transparent;overflow:hidden;font-family:"Segoe UI",system-ui,sans-serif;user-select:none}
-#w{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding:6px 14px 18px}
-#bubble{width:100%;max-height:250px;overflow:auto;background:#f1cfd0;color:#3a2bd6;border-radius:26px;padding:14px 20px;font-size:20px;font-weight:600;line-height:1.35;margin-bottom:18px;box-shadow:0 8px 30px #0008;transition:opacity .25s,transform .25s}
-#bubble.hide{opacity:0;transform:translateY(10px)}#bubble .me{color:#7a6be0;font-weight:500;font-size:15px;margin-bottom:4px}
-#orb{position:relative;width:120px;height:120px;flex:none;border-radius:50%;background:radial-gradient(circle at 50% 45%,#0c1330,#04060d 72%);box-shadow:0 0 0 2px #ffffff14,0 0 46px #4d7dff77;overflow:hidden;transform:scale(var(--s,1));transition:transform .08s}
-.p{position:absolute;left:50%;top:50%;width:90%;height:58%;margin:-29% 0 0 -45%;border-radius:50%;filter:blur(7px);mix-blend-mode:screen;opacity:.92;animation:r var(--d) linear infinite}
-.p:nth-child(1){background:radial-gradient(closest-side,#7dffd8,transparent);--d:6s}
-.p:nth-child(2){background:radial-gradient(closest-side,#ff5fa8,transparent);--d:8s;animation-direction:reverse;transform:rotate(60deg)}
-.p:nth-child(3){background:radial-gradient(closest-side,#5a8bff,transparent);--d:5s}
-.p:nth-child(4){background:radial-gradient(closest-side,#b56bff,transparent);--d:7s;animation-direction:reverse}
-#core{position:absolute;inset:34%;border-radius:50%;background:radial-gradient(#fff,#fff0 70%);filter:blur(6px);opacity:.75;animation:g 2.4s ease-in-out infinite}
-@keyframes r{from{rotate:0deg}to{rotate:360deg}}@keyframes g{50%{opacity:1;transform:scale(1.25)}}
-body.thinking .p{animation-duration:1.6s}body.speaking #orb{animation:sp .7s ease-in-out infinite}@keyframes sp{50%{transform:scale(1.13)}}
-</style></head><body class="idle"><div id="w"><div id="bubble" class="hide"></div><div id="orb"><div class="p"></div><div class="p"></div><div class="p"></div><div class="p"></div><div id="core"></div></div></div>
+#w{position:absolute;inset:0;display:flex;flex-direction:column;align-items:flex-end;padding:4px 6px}
+/* ---- orb: glass sphere with swirling ribbons (like the reference GIF) ---- */
+#orb{--o:64px;position:relative;width:var(--o);height:var(--o);flex:none;border-radius:50%;cursor:pointer;
+ background:radial-gradient(circle at 50% 38%,#3b2a8f 0%,#23155f 55%,#150c3d 100%);
+ box-shadow:inset 0 0 0 1px #d9c7ff88,inset 0 0 10px 2px #b79bff66,inset 0 4px 6px #ffffff55,0 0 16px 3px #7a4dff66,0 0 34px 6px #4d2fd055;
+ overflow:hidden;transform:scale(var(--s,1));transition:transform .08s;isolation:isolate}
+#orb::after{content:"";position:absolute;inset:0;border-radius:50%;z-index:5;pointer-events:none;
+ background:radial-gradient(ellipse 70% 38% at 50% 6%,#ffffff66,transparent 70%),radial-gradient(circle at 50% 50%,transparent 62%,#c9b3ff55 100%)}
+.p{position:absolute;left:50%;top:50%;width:84%;height:50%;margin:-25% 0 0 -42%;mix-blend-mode:screen;animation:r var(--d) linear infinite;filter:blur(.8px);opacity:.9;
+ border-radius:60% 40% 55% 45%/50% 55% 45% 50%}
+.p:nth-child(1){background:linear-gradient(120deg,#ff4fd8,#b14bff 60%,transparent);--d:7s;transform-origin:62% 50%}
+.p:nth-child(2){background:linear-gradient(60deg,#1ce6d1,#2aa9ff 65%,transparent);--d:9s;animation-direction:reverse;transform-origin:40% 55%}
+.p:nth-child(3){background:linear-gradient(200deg,#5ff3ff,#3a7bff 60%,transparent);--d:6s;transform-origin:55% 45%}
+.p:nth-child(4){background:linear-gradient(300deg,#9b6bff,#ff7ae6 60%,transparent);--d:11s;animation-direction:reverse}
+#core{position:absolute;left:50%;top:50%;width:30%;height:30%;margin:-15% 0 0 -15%;border-radius:50%;z-index:3;
+ background:radial-gradient(#fff 0%,#fff 18%,#bff8ff 40%,#fff0 72%);filter:blur(2px);animation:g 2.6s ease-in-out infinite}
+@keyframes r{from{rotate:0deg}to{rotate:360deg}}@keyframes g{50%{transform:scale(1.25);opacity:.85}}
+body.thinking .p{animation-duration:1.8s}body.speaking #orb{animation:sp .75s ease-in-out infinite}@keyframes sp{50%{transform:scale(1.12)}}
+body.idle #core{animation-duration:4s}
+/* ---- bubble ---- */
+#bubble{position:relative;margin-top:12px;max-width:100%;max-height:230px;overflow:auto;background:#f1cfd0;color:#3a2bd6;border-radius:20px;
+ padding:11px 16px;font-size:16px;font-weight:600;line-height:1.35;box-shadow:0 8px 26px #0008;transition:opacity .25s,transform .25s;scrollbar-width:none}
+#bubble.hide{opacity:0;transform:translateY(-8px);pointer-events:none}#bubble .me{color:#7a6be0;font-weight:500;font-size:13px;margin-bottom:3px}
+</style></head><body class="idle"><div id="w"><div id="orb" title="Click: stop talking / dismiss"><div class="p"></div><div class="p"></div><div class="p"></div><div class="p"></div><div id="core"></div></div><div id="bubble" class="hide"></div></div>
+<script src="voices.js"></script>
 <script>
-const $=id=>document.getElementById(id),B=$("bubble"),sleep=ms=>new Promise(r=>setTimeout(r,ms));
-let C={},voices=[],stream,ac,an,buf,cmdReq=false,busy=false,hideT,lv=0,shown=false,typer;
+const $=id=>document.getElementById(id),B=$("bubble"),O=$("orb"),sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let C={perms:{}},stream,ac,an,buf,cmdReq=false,busy=false,active=false,shown=false,lv=0,typer,audio,speaking=false,lastAct=Date.now(),warned=false;
 const cls=s=>document.body.className=s;
-function show(){clearTimeout(hideT);if(!shown){shown=true;P.ov(true)}}
-function hideLater(ms=5500){clearTimeout(hideT);hideT=setTimeout(()=>{shown=false;B.classList.add("hide");cls("idle");P.ov(false)},ms)}
+function show(){if(!shown){shown=true;P.ov(true)}}
 function text(me,t){B.classList.remove("hide");B.innerHTML="";if(me){const a=document.createElement("div");a.className="me";a.textContent=me;B.append(a)}const d=document.createElement("div");d.textContent=t||"";B.append(d);return d}
+function stopSpeech(){clearInterval(typer);speechSynthesis.cancel();if(audio){audio.onended=audio.onerror=null;audio.pause();audio=null}speaking=false}
+function dismiss(){stopSpeech();active=false;cmdReq=false;shown=false;B.classList.add("hide");cls("idle");P.ov(false)}
+O.onclick=()=>{if(speaking){stopSpeech();cls("listening")}else dismiss()};
 async function mic(){if(stream&&stream.active)return true;
-  try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});ac=new AudioContext();const s=ac.createMediaStreamSource(stream);an=ac.createAnalyser();an.fftSize=512;s.connect(an);buf=new Uint8Array(512);return true}catch{return false}}
+ try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});ac=new AudioContext();const s=ac.createMediaStreamSource(stream);an=ac.createAnalyser();an.fftSize=512;s.connect(an);buf=new Uint8Array(512);return true}catch{return false}}
 function level(){an.getByteTimeDomainData(buf);let s=0;for(const v of buf)s+=((v-128)/128)**2;return Math.sqrt(s/buf.length)}
-(function f(){document.getElementById("orb").style.setProperty("--s",shown&&document.body.className==="listening"?1+Math.min(lv*4,.3):1);requestAnimationFrame(f)})();
+(function f(){O.style.setProperty("--s",shown&&document.body.className==="listening"?1+Math.min(lv*3,.25):1);requestAnimationFrame(f)})();
 function record(wake){return new Promise(res=>{
-  const mr=new MediaRecorder(stream,{mimeType:"audio/webm;codecs=opus"}),ch=[];let spoke=false,q=0,sp=0,t0=Date.now();
-  mr.ondataavailable=e=>ch.push(e.data);mr.start();
-  const iv=setInterval(()=>{const r=level();lv=r;if(r>.035){spoke=true;q=0;sp+=50}else if(spoke)q+=50;const el=Date.now()-t0;
-    if(wake&&!spoke&&el>4000){clearInterval(iv);mr.onstop=()=>res("again");mr.stop();return}
-    if((spoke&&q>1000)||(spoke&&el>15000)||(!wake&&!spoke&&el>7000)){clearInterval(iv);mr.onstop=()=>res(spoke&&sp>=300?new Blob(ch,{type:"audio/webm"}):null);mr.stop()}},50)})}
+ const mr=new MediaRecorder(stream,{mimeType:"audio/webm;codecs=opus"}),ch=[];let spoke=false,q=0,sp=0,t0=Date.now();
+ mr.ondataavailable=e=>ch.push(e.data);mr.start();
+ const iv=setInterval(()=>{const r=level();lv=r;if(r>.035){spoke=true;q=0;sp+=50}else if(spoke)q+=50;const el=Date.now()-t0;
+  if(!spoke&&el>4000){clearInterval(iv);mr.onstop=()=>res("again");mr.stop();return}
+  if((spoke&&q>1000)||(spoke&&el>15000)){clearInterval(iv);mr.onstop=()=>res(sp>=300?new Blob(ch,{type:"audio/webm"}):null);mr.stop()}},50)})}
 async function main(){
-  if(busy)return;busy=true;
-  while(true){
-    if(!C.key||(!C.wake&&!cmdReq))break;
-    if(!await mic()){text("","Allow the microphone for Paru.");show();hideLater(6000);break}
-    const wake=!cmdReq;cmdReq=false;
-    if(!wake){show();text("","");cls("listening")}
-    const seg=await record(wake);
-    if(seg==="again")continue;
-    if(!seg){if(!wake){text("","I didn't hear anything.");hideLater(2500)}continue}
-    if(!wake){cls("thinking")}
-    const r=await P.api("/voice/audio?lang="+C.lang+"&wake="+(wake?1:0),"POST",await seg.arrayBuffer(),"audio/webm");
-    if(r.error==="unreachable"||r.error){if(!wake){text("",r.error==="unreachable"?"I can't reach the agent.":"Wrong key. Open the Paru app → Settings.");hideLater(4000)}await sleep(wake?3000:0);continue}
-    if(wake&&r.mode==="offline")continue;
-    if(!r.text){if(!wake){text("","");hideLater(1500)}continue}
-    show();const d=text(r.heard,"");cls("thinking");
-    if(!await commands(r.heard||""))await speak(r.text,d);
-    if(r.text.trim()==="Yes?")cmdReq=true;else hideLater();
-  }
-  busy=false}
-async function commands(h){
-  const l=h.toLowerCase();let m=l.match(/(?:voice|குரல்)\s*(?:number|எண்)?\s*(\d+)/);
-  if(/(change|switch|next).*voice|குரல்.*மாற்று|அடுத்த குரல்/.test(l)||m){
-    const pool=voices.filter(v=>/^(en|ta)/i.test(v.lang));if(!pool.length)return false;
-    let i=pool.findIndex(v=>v.name===C.voice);i=m&&pool[+m[1]-1]?+m[1]-1:(i+1)%pool.length;
-    await P.setCfg({voice:pool[i].name});await speak("Voice "+(i+1)+", "+pool[i].name.replace(/Microsoft | Online \(Natural\)/g,""),text(h,""));return true}
-  m=l.match(/(?:open|launch)\s+(.{2,60})$/);
-  if(m){const t=m[1].replace(/[.!?]+$/,"").trim(),a=await P.act({target:t});await speak(a==="ok"?"Opening "+t:a==="denied"?"Okay, I won't.":"I can't open that.",text(h,""));return true}
-  return false}
-function speak(t,d){return new Promise(res=>{
-  cls("speaking");clearInterval(typer);const w=t.split(/\s+/);let i=0;
-  typer=setInterval(()=>{i++;d.textContent=w.slice(0,i).join(" ");B.scrollTop=1e9;if(i>=w.length)clearInterval(typer)},120);
-  const u=new SpeechSynthesisUtterance(t),ta=/[\u0B80-\u0BFF]/.test(t);u.lang=ta?"ta-IN":"en-IN";u.rate=1.05;
-  let v=voices.find(x=>x.name===C.voice);if(!v||(ta&&!/^ta/i.test(v.lang))||(!ta&&!/^en/i.test(v.lang)))v=voices.find(x=>x.lang.toLowerCase().startsWith(ta?"ta":"en"));if(v)u.voice=v;
-  u.onend=u.onerror=()=>{clearInterval(typer);d.textContent=t;cls("idle");res()};speechSynthesis.speak(u)})}
-(async()=>{C=await P.cfg();const gv=()=>voices=speechSynthesis.getVoices();gv();speechSynthesis.onvoiceschanged=gv;
-  P.onCfg(c=>{C=c;main()});P.onTalk(()=>{cmdReq=true;speechSynthesis.cancel();main()});main()})();
+ if(busy)return;busy=true;
+ try{while(true){
+  if(!C.key||(!C.wake&&!active&&!cmdReq))break;
+  if(!C.perms.mic){if(!warned){warned=true;show();text("","Open Paru → Permissions and allow the microphone.");await sleep(5000);dismiss()}break}
+  if(!await mic()){show();text("","Microphone is blocked in Windows settings.");await sleep(5000);dismiss();break}
+  if(cmdReq){active=true;cmdReq=false;lastAct=Date.now()}
+  const wake=!active;
+  if(!wake){show();if(!speaking)cls("listening");if(!B.textContent)text("","Listening…")}
+  const seg=await record(wake);
+  if(seg==="again"||!seg){if(active&&C.autoHide>0&&Date.now()-lastAct>C.autoHide*1000)dismiss();continue}
+  if(!wake)cls("thinking");
+  const r=await P.api("/voice/audio?wake="+(wake?1:0),"POST",await seg.arrayBuffer(),"audio/webm");
+  if(r.error){if(!wake){text("",r.error==="unreachable"?"I can't reach the agent.":"Wrong key. Open Paru → Settings.");await sleep(3500)}else await sleep(3000);continue}
+  if(wake&&r.mode==="offline")continue;
+  if(isStop(r.heard)||(r.action&&r.action.type==="stop")){if(active||r.heard)dismiss();continue}
+  if(wake&&!r.text&&(!r.action||r.action.type==="none"))continue;   // not addressed to Paru
+  active=true;lastAct=Date.now();show();const d=text(r.heard,"");cls("thinking");
+  let out=r.text||"";const a=r.action||{type:"none"};
+  if(a.type==="change_voice")out=await changeVoice(a.target,r.lang,out);
+  else if(a.type!=="none"&&a.type!=="check_mail"&&a.type!=="daily_report"&&a.type!=="draft_reply"){
+   const res=await P.act(a.type,a.target);
+   if(/^no-permission/.test(res))out="I don't have permission for that yet. Open Paru → Permissions to allow it.";
+   else if(res==="denied")out="Okay, I won't.";else if(res==="blocked"||res==="failed"||res==="notfound"||res==="toobig")out="Sorry, I couldn't do that.";
+   else if(!out)out="Okay."}
+  if(out)await speak(out,d,r.lang);
+  lastAct=Date.now();cls(active?"listening":"idle");      // stay open: keep listening until you say "shut up"
+ }}finally{busy=false}}
+async function changeVoice(t,lang,out){
+ lang=(lang||"en").slice(0,2);const pool=PARU_VOICES.all.filter(v=>v.lang===lang);if(!pool.length)return out;
+ let i=pool.findIndex(v=>v.id===C.voice),n=parseInt(t);
+ if(n>0&&pool[n-1])i=n-1;else if(/^(male|man)$/i.test(t)){const m=pool.filter(v=>v.g==="M");i=pool.indexOf(m[(m.indexOf(pool[i])+1)%m.length]||m[0])}
+ else if(/^(female|woman)$/i.test(t)){const m=pool.filter(v=>v.g==="F");i=pool.indexOf(m[(m.indexOf(pool[i])+1)%m.length]||m[0])}
+ else i=(i+1)%pool.length;
+ await P.setCfg({voice:pool[i].id});C.voice=pool[i].id;return out||("Voice "+(i+1)+": "+pool[i].name)}
+async function tts(t,lang){
+ const v=PARU_VOICES.pick(lang,C.voice);
+ const r=await P.api("/voice/tts?text="+encodeURIComponent(t)+"&voice="+v.id+"&rate="+(C.rate||0),"GET",null,null,true);
+ if(!r||r.error||!r.audio)return null;return URL.createObjectURL(new Blob([r.audio],{type:"audio/mpeg"}))}
+async function speak(t,d,lang){
+ speaking=true;cls("speaking");clearInterval(typer);const w=t.split(/\s+/);let i=0,ms=130;
+ const show_=(iv)=>{clearInterval(typer);typer=setInterval(()=>{i++;d.textContent=w.slice(0,i).join(" ");B.scrollTop=1e9;if(i>=w.length)clearInterval(typer)},iv)};
+ const done=()=>{clearInterval(typer);d.textContent=t;speaking=false;audio=null};
+ const url=await tts(t,lang);if(!speaking)return;
+ if(url){await new Promise(res=>{audio=new Audio(url);
+   audio.onloadedmetadata=()=>show_(Math.max(70,Math.min(260,(audio.duration*1000)/w.length)));
+   audio.onended=audio.onerror=()=>{URL.revokeObjectURL(url);res()};audio.play().catch(res);show_(ms)});done();return}
+ // fallback: built-in Windows voice (works offline)
+ await new Promise(res=>{const u=new SpeechSynthesisUtterance(t);u.lang=lang||"en";const vs=speechSynthesis.getVoices();
+  const vv=vs.find(x=>x.lang.toLowerCase().startsWith((lang||"en").slice(0,2)));if(vv)u.voice=vv;u.onend=u.onerror=res;show_(ms);speechSynthesis.speak(u)});done()}
+(async()=>{C=await P.cfg();P.onCfg(c=>{C=c;main()});
+ P.onTalk(()=>{stopSpeech();cmdReq=true;active=true;show();text("","Listening…");cls("listening");main()});main()})();
 </script></body></html>

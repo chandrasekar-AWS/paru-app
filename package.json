@@ -1,6 +1,45 @@
-{"name":"paru","version":"2.0.0","description":"Paru assistant","main":"main.js","author":"Paru",
-"scripts":{"start":"electron .","dist":"electron-builder --win --publish never"},
-"devDependencies":{"electron":"33.2.0","electron-builder":"25.1.8"},
-"build":{"appId":"com.paru.assistant","productName":"Paru","files":["main.js","preload.js","*.html","build/**"],
-"extraResources":[{"from":"agent","to":"agent","filter":["agent.py","requirements.txt","env.example.txt"]}],
-"win":{"target":"nsis","icon":"build/icon.png"},"nsis":{"oneClick":true,"perMachine":false}}}
+{
+ "name": "paru",
+ "version": "2.1.0",
+ "description": "Paru assistant",
+ "main": "main.js",
+ "author": "Paru",
+ "scripts": {
+  "start": "electron .",
+  "dist": "electron-builder --win --publish never"
+ },
+ "devDependencies": {
+  "electron": "33.2.0",
+  "electron-builder": "25.1.8"
+ },
+ "build": {
+  "appId": "com.paru.assistant",
+  "productName": "Paru",
+  "files": [
+   "main.js",
+   "preload.js",
+   "voices.js",
+   "*.html",
+   "build/**"
+  ],
+  "extraResources": [
+   {
+    "from": "agent",
+    "to": "agent",
+    "filter": [
+     "agent.py",
+     "requirements.txt",
+     "env.example.txt"
+    ]
+   }
+  ],
+  "win": {
+   "target": "nsis",
+   "icon": "build/icon.png"
+  },
+  "nsis": {
+   "oneClick": true,
+   "perMachine": false
+  }
+ }
+}

@@ -1116,40 +1116,137 @@ async def voice_history_clear(request: Request):
     return {"ok": True}
 
 
+ACTIONS = ("none", "stop", "open_app", "close_app", "open_url", "web_search", "download",
+           "open_folder", "check_mail", "daily_report", "draft_reply", "change_voice")
+
+
+def _parse_json(t):
+    return json.loads(re.sub(r"^```(?:json)?|```$", "", t.strip(), flags=re.M).strip())
+
+
+def brain_system(wake):
+    gate = (f'The owner must start by saying "hello {ASSISTANT_NAME}", "hey {ASSISTANT_NAME}" or just "{ASSISTANT_NAME}" '
+            f'(in ANY language; also heard as {", ".join(WAKE_ALIASES)}). If the speech does not start that way, answer must be empty. '
+            'If it is ONLY the greeting with no request, set greeting_only=true and answer with a short "Yes?" in the language spoken. ' if wake else "")
+    return (f"You are {ASSISTANT_NAME}, the personal voice assistant of {OWNER_NAME}. The owner may speak ANY language in the world. "
+            f"Write exactly what was said in heard (original script). {gate}"
+            "Answer in the SAME language the owner spoke, 1-3 short natural sentences, no markdown, no emojis. "
+            "Use ONLY the snapshot for facts about the owner's work; for general questions use your own knowledge. "
+            "Set lang to the ISO 639-1 code of your answer language (en, ta, hi, es, fr...). "
+            "ACTIONS (put in action.type, default none): "
+            "stop = owner tells you to be quiet/stop/shut up/go away/cancel (any language), answer empty or a very short okay; "
+            "open_app / close_app = open or close a program on the computer (action.target = program name); "
+            "open_url = open a website (target = url or domain); web_search = search the web in the browser (target = search query); "
+            "download = download a file from a direct url (target = url); open_folder = open Pictures, Videos, Downloads, Documents or Desktop (target = that word); "
+            "check_mail = check the owner's email now; daily_report = build and send today's report; "
+            "draft_reply = write a reply draft to a waiting client message (action.item = the # number from the snapshot, action.target = what to say); "
+            "change_voice = owner wants a different voice (target = empty, or a number, or male/female). "
+            "To add a task/reminder put it in add_task and the due date in due (YYYY-MM-DD or empty). "
+            "You cannot send client messages yourself: drafts are sent only when the owner presses Send in Telegram. "
+            'Return JSON {"heard":"","lang":"en","greeting_only":false,"answer":"","action":{"type":"none","target":"","item":0},"add_task":"","due":""}'
+            "\n\nSNAPSHOT:\n" + context_text())
+
+
+async def run_actions(d, ans, lang):
+    act = d.get("action") if isinstance(d.get("action"), dict) else {}
+    typ = str(act.get("type", "none"))
+    tgt = str(act.get("target", "") or "")[:300]
+    if typ not in ACTIONS:
+        typ = "none"
+    try:
+        if typ == "check_mail":
+            n = await check_mail()
+            ans = await gtext(f"Reply in language code '{lang}' only, 1-2 short plain sentences, no markdown.",
+                              f"New emails just fetched: {n}. {msgs_text()}")
+        elif typ == "daily_report":
+            await daily_report()
+        elif typ == "draft_reply":
+            iid = int(act.get("item") or 0)
+            it = get_item(iid)
+            if it:
+                await make_draft(it, tgt)
+                await show_draft(iid)
+            else:
+                ans = ans or "I could not find that message."
+    except Exception as e:
+        log("error", f"voice action {typ}: {e}")
+        ans = (ans + " " if ans else "") + "(" + friendly(e)[:80] + ")"
+    return typ, tgt, ans
+
+
 @app.post("/voice/audio")
-async def voice_audio(request: Request, lang: str = "en", wake: int = 0):
-    """Your recorded voice -> Gemini hears it (English/Tamil) and answers in ONE call."""
+async def voice_audio(request: Request, lang: str = "auto", wake: int = 0):
+    """Your recorded voice (any language) -> Gemini hears it and answers + picks an action in ONE call."""
     if not key_ok(request):
         return JSONResponse({"error": "wrong key"}, status_code=401)
     raw = await request.body()
     if len(raw) < 1500:
         return {"heard": "", "text": "", "mode": "online"}
     mime = request.headers.get("content-type", "audio/webm").split(";")[0]
-    lang = lang if lang in LANG_NAME else "en"
-    gate = (f'The owner must start by saying "hello {ASSISTANT_NAME}", "hey {ASSISTANT_NAME}" or just "{ASSISTANT_NAME}" '
-            f'(also heard as {", ".join(WAKE_ALIASES)}). If the speech does not start that way, answer must be empty. '
-            'If it is ONLY the greeting with no request, answer exactly: Yes? ' if wake else "")
-    system = (f"You are {ASSISTANT_NAME}, personal assistant of {OWNER_NAME}. The audio is the owner speaking English or Tamil. "
-              f"Write what was said in heard (original script). {gate}Then answer in the language spoken, 1-3 short sentences, "
-              "no markdown, using ONLY the snapshot for facts. To add a task put it in add_task and due (YYYY-MM-DD or empty). "
-              'Return JSON {"heard":"","answer":"","add_task":"","due":""}\n\nSNAPSHOT:\n' + context_text())
     try:
         t = await asyncio.wait_for(gemini([{"role": "user", "parts": [
             {"inline_data": {"mime_type": mime, "data": base64.b64encode(raw).decode()}},
-            {"text": "Transcribe and answer."}]}], system, as_json=True), 30)
-        d = json.loads(re.sub(r"^```(?:json)?|```$", "", t.strip(), flags=re.M).strip())
+            {"text": "Transcribe and answer."}]}], brain_system(wake), as_json=True), 35)
+        d = _parse_json(t)
     except Exception as e:
-        return {"heard": "", "text": "I can't reach the internet, so I can't hear you. Type your question instead, and I will answer from your saved data.",
-                "mode": "offline"}
+        return {"heard": "", "text": "I can't reach the internet right now.", "mode": "offline"}
+    return await finish_voice(d)
+
+
+async def finish_voice(d):
+    if not isinstance(d, dict):
+        return {"heard": "", "text": str(d), "mode": "online"}
     heard, ans = str(d.get("heard", "")).strip(), str(d.get("answer", "")).strip()
-    if d.get("add_task") and ans:
+    lg = str(d.get("lang", "en") or "en")[:5].lower()
+    if d.get("add_task") and (ans or heard):
         try:
             add_task("me", str(d["add_task"]) + "|" + str(d.get("due", "") or ""))
         except Exception:
             pass
-    if ans:
-        chat_log(heard, ans)
-    return {"heard": heard, "text": ans, "mode": "online"}
+    typ, tgt, ans = await run_actions(d, ans, lg)
+    if ans or typ != "none":
+        chat_log(heard, ans or f"[{typ}] {tgt}")
+    return {"heard": heard, "text": ans, "lang": lg, "greeting": bool(d.get("greeting_only")),
+            "action": {"type": typ, "target": tgt}, "mode": "online"}
+
+
+@app.post("/voice/text")
+async def voice_text(request: Request):
+    """Typed message (any language) -> same brain as the voice path."""
+    if not key_ok(request):
+        return JSONResponse({"error": "wrong key"}, status_code=401)
+    d = await request.json()
+    q_ = str(d.get("text", ""))[:500]
+    try:
+        out = _parse_json(await asyncio.wait_for(gemini([{"role": "user", "parts": [{"text": q_}]}],
+                                                        brain_system(False), as_json=True), 30))
+        if isinstance(out, dict):
+            out["heard"] = q_
+    except Exception:
+        return {"heard": q_, "text": offline_answer(), "mode": "offline"}
+    return await finish_voice(out)
+
+
+@app.get("/voice/tts")
+async def voice_tts(request: Request, text: str, voice: str = "en-US-AriaNeural", rate: int = 0):
+    """Human-sounding neural voice (Microsoft Edge voices via edge-tts, needs internet)."""
+    from fastapi.responses import Response
+    if not key_ok(request):
+        return JSONResponse({"error": "wrong key"}, status_code=401)
+    if not re.fullmatch(r"[A-Za-z]{2,3}-[A-Za-z0-9-]{2,12}Neural|[A-Za-z0-9-]{4,40}", voice):
+        return JSONResponse({"error": "bad voice"}, status_code=400)
+    try:
+        import edge_tts
+        comm = edge_tts.Communicate(text[:1200], voice, rate=f"{max(-50, min(50, rate)):+d}%")
+        chunks = []
+        async for c in comm.stream():
+            if c["type"] == "audio":
+                chunks.append(c["data"])
+        if not chunks:
+            raise RuntimeError("no audio")
+        return Response(b"".join(chunks), media_type="audio/mpeg")
+    except Exception as e:
+        return JSONResponse({"error": "tts unavailable: " + str(e)[:120]}, status_code=503)
 
 
 @app.get("/voice", response_class=HTMLResponse)
