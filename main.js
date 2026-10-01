@@ -8,7 +8,8 @@ const defDir=()=>fs.existsSync('E:\\agent\\agent.py')?'E:\\agent':path.join(proc
 const PERMS={mic:false,contacts:false,photos:false,calls:false,apps:false,files:false,
   search:false,download:false,upload:false,reply:false,update:false,onlineCalls:false,browser:false};
 const DEF=()=>({server:'http://localhost:8000',key:'',lang:'auto',wake:true,voice:'en-IN-NeerjaNeural',rate:0,
-  agentDir:defDir(),theme:'dark',askEach:true,autoHide:0,onboarded:false,perms:{...PERMS}});
+  agentDir:defDir(),theme:'dark',accent:'#5a8bff',fontSize:'normal',orbSize:'small',closeQuits:false,interrupt:true,voiceLock:false,voiceprint:null,voiceThr:0.9,
+  askEach:true,autoHide:0,onboarded:false,perms:{...PERMS}});
 const cfg=()=>{try{const c={...DEF(),...JSON.parse(fs.readFileSync(cfgPath,'utf8'))};c.perms={...PERMS,...c.perms};return c}catch{return DEF()}};
 const base=()=>cfg().server.replace(/\/$/,'');
 const push=()=>{const n=cfg();[mainWin,ov].forEach(w=>w&&!w.isDestroyed()&&w.webContents.send('cfg',n));return n};
@@ -25,25 +26,27 @@ const killAgent=()=>new Promise(r=>cp.exec("for /f \"tokens=5\" %a in ('netstat 
 /* ---------- windows ---------- */
 const showMain=()=>{mainWin.show();mainWin.focus()};
 const talk=()=>ov.webContents.send('talk');
-const bg=t=>t==='light'?'#f6f3f1':'#14100f';
+const goto_=sec=>{showMain();mainWin.webContents.send('goto',sec)};
+const bg=t=>t==='light'?'#ffffff':'#000000';
 if(!app.requestSingleInstanceLock())app.quit();
 app.on('second-instance',()=>mainWin&&showMain());
 app.whenReady().then(async()=>{
   cfgPath=path.join(app.getPath('userData'),'cfg.json');
   // microphone only when the user granted it in Paru's permission screen
-  session.defaultSession.setPermissionRequestHandler((w,p,cb)=>cb(p==='media'&&cfg().perms.mic));
-  session.defaultSession.setPermissionCheckHandler((w,p)=>p==='media'&&cfg().perms.mic);
+  session.defaultSession.setPermissionRequestHandler((w,p,cb)=>cb(p==='media'));
+  session.defaultSession.setPermissionCheckHandler((w,p)=>p==='media');
   const preload=path.join(__dirname,'preload.js'),icon=nativeImage.createFromPath(path.join(__dirname,'build','icon.png'));
   mainWin=new BrowserWindow({width:1060,height:700,minWidth:840,minHeight:560,show:false,title:'Paru',frame:false,
     backgroundColor:bg(cfg().theme),icon,webPreferences:{preload}});
   mainWin.setMenuBarVisibility(false);mainWin.loadFile('app.html');
   mainWin.on('close',e=>{if(!app.isQuitting){e.preventDefault();mainWin.hide()}});
+  mainWin.on('enter-full-screen',()=>mainWin.webContents.send('fs',true));mainWin.on('leave-full-screen',()=>mainWin.webContents.send('fs',false));
   const wa=screen.getPrimaryDisplay().workArea,W=380,H=340;
   ov=new BrowserWindow({width:W,height:H,x:wa.x+wa.width-W-10,y:wa.y+8,frame:false,transparent:true,alwaysOnTop:true,skipTaskbar:true,
     resizable:false,focusable:false,show:false,hasShadow:false,webPreferences:{preload,backgroundThrottling:false}});
   ov.setAlwaysOnTop(true,'screen-saver');ov.loadFile('overlay.html');
   tray=new Tray(icon.resize({width:16,height:16}));tray.setToolTip('Paru');tray.on('click',showMain);
-  tray.setContextMenu(Menu.buildFromTemplate([{label:'Open Paru',click:showMain},{label:'Talk now',click:talk},
+  tray.setContextMenu(Menu.buildFromTemplate([{label:'Open Paru',click:showMain},{label:'Talk now',click:talk},{label:'Stop / start listening in background',click:()=>{const c=cfg();fs.writeFileSync(cfgPath,JSON.stringify({...c,wake:!c.wake}));push()}},
     {label:'Restart agent',click:async()=>{await killAgent();ensureAgent()}},{label:'Quit',click:()=>{app.isQuitting=true;app.quit()}}]));
   globalShortcut.register('Control+Shift+Space',talk);
   app.setLoginItemSettings({openAtLogin:true,args:['--hidden']});
@@ -55,10 +58,13 @@ app.on('will-quit',()=>{globalShortcut.unregisterAll();try{agent&&agent.kill()}c
 
 /* ---------- window buttons (red / yellow / green) ---------- */
 ipcMain.on('win',(e,a)=>{const w=BrowserWindow.fromWebContents(e.sender);if(!w)return;
-  if(a==='close')w.hide();else if(a==='min')w.minimize();else if(a==='full')w.setFullScreen(!w.isFullScreen())});
-ipcMain.handle('winState',e=>BrowserWindow.fromWebContents(e.sender).isFullScreen());
+  if(a==='close'){if(w===mainWin&&cfg().closeQuits){app.isQuitting=true;app.quit()}else w.hide()}else if(a==='min')w.minimize();else if(a==='full')w.setFullScreen(!w.isFullScreen());else if(a==='full-exit'&&w.isFullScreen())w.setFullScreen(false)});
 
-/* ---------- overlay / talk ---------- */
+/* ---------- overlay / talk / voice training ---------- */
+ipcMain.on('enroll',()=>ov.webContents.send('enroll'));
+ipcMain.on('enrollDone',(e,r)=>mainWin.webContents.send('enrollDone',r));
+ipcMain.on('openMain',(e,sec)=>goto_(sec||'general'));
+ipcMain.handle('winState',()=>mainWin.isFullScreen());
 ipcMain.on('ov',(e,s)=>{s?ov.showInactive():ov.hide()});ipcMain.on('talk',talk);
 
 /* ---------- config ---------- */
@@ -78,6 +84,11 @@ ipcMain.handle('api',async(e,{p,method,body,type,raw})=>{
 const FOLDERS={pictures:['pictures','photos'],photos:['pictures','photos'],videos:['videos','photos'],downloads:['downloads','files'],
   documents:['documents','files'],desktop:['desktop','files']};
 const NEVER=/^(explorer|winlogon|csrss|svchost|lsass|services|system|wininit|smss|dwm|paru)(\.exe)?$/i;
+const ALIAS={whatsapp:'whatsapp:',settings:'ms-settings:',calendar:'outlookcal:',mail:'outlookmail:',calculator:'calc',camera:'microsoft.windows.camera:',
+  store:'ms-windows-store:',teams:'msteams:',spotify:'spotify:',telegram:'tg:','file explorer':'explorer',explorer:'explorer','task manager':'taskmgr',
+  paint:'mspaint',word:'winword',excel:'excel',powerpoint:'powerpnt',chrome:'chrome',edge:'msedge',firefox:'firefox','vs code':'code',vscode:'code',terminal:'wt',cmd:'cmd',notepad:'notepad'};
+const EXE={whatsapp:'WhatsApp.exe',chrome:'chrome.exe',edge:'msedge.exe',firefox:'firefox.exe',spotify:'Spotify.exe',telegram:'Telegram.exe',teams:'ms-teams.exe',
+  word:'WINWORD.EXE',excel:'EXCEL.EXE',powerpoint:'POWERPNT.EXE',notepad:'notepad.exe',calculator:'CalculatorApp.exe','vs code':'Code.exe',vscode:'Code.exe',paint:'mspaint.exe'};
 const ask=async msg=>{if(!cfg().askEach)return true;const r=await dialog.showMessageBox({type:'question',buttons:['Allow','Cancel'],defaultId:1,cancelId:1,title:'Paru',message:msg});return r.response===0};
 const need=k=>cfg().perms[k]?null:'no-permission:'+k;
 ipcMain.handle('act',async(e,{type,target})=>{
@@ -87,11 +98,11 @@ ipcMain.handle('act',async(e,{type,target})=>{
       if(!/^[\w .:\/\\-]{1,120}$/.test(target))return 'blocked';
       if(/^https?:\/\//.test(target)||/^[\w-]+\.[a-z]{2,}$/i.test(target)){if(n=need('browser'))return n;browse(/^https?/.test(target)?target:'https://'+target);return 'ok'}
       if(!await ask('Paru wants to open: '+target))return 'denied';
-      cp.exec('start "" "'+target+'"',{shell:'cmd.exe'});return 'ok'}
+      cp.exec('start "" "'+(ALIAS[target.toLowerCase()]||target)+'"',{shell:'cmd.exe'});return 'ok'}
     if(type==='close_app'){ const n=need('apps');if(n)return n;
       if(!/^[\w .-]{1,60}$/.test(target)||NEVER.test(target))return 'blocked';
       if(!await ask('Paru wants to close: '+target))return 'denied';
-      const exe=/\.exe$/i.test(target)?target:target.replace(/\s+/g,'')+'.exe';
+      const exe=EXE[target.toLowerCase()]||(/\.exe$/i.test(target)?target:target.replace(/\s+/g,'')+'.exe');
       return await new Promise(r=>cp.execFile('taskkill',['/IM',exe,'/F'],err=>r(err?'notfound':'ok')))}
     if(type==='open_url'){ const n=need('browser');if(n)return n;
       const u=/^https?:\/\//i.test(target)?target:'https://'+target;if(!/^https?:\/\/[\w.-]+/i.test(u))return 'blocked';browse(u);return 'ok'}

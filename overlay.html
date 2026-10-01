@@ -2,7 +2,7 @@
 *{box-sizing:border-box}html,body{margin:0;height:100%;background:transparent;overflow:hidden;font-family:"Segoe UI",system-ui,sans-serif;user-select:none}
 #w{position:absolute;inset:0;display:flex;flex-direction:column;align-items:flex-end;padding:4px 6px}
 /* ---- orb: glass sphere with swirling ribbons (like the reference GIF) ---- */
-#orb{--o:64px;position:relative;width:var(--o);height:var(--o);flex:none;border-radius:50%;cursor:pointer;
+#orb{--o:var(--osz,64px);position:relative;width:var(--o);height:var(--o);flex:none;border-radius:50%;cursor:pointer;
  background:radial-gradient(circle at 50% 38%,#3b2a8f 0%,#23155f 55%,#150c3d 100%);
  box-shadow:inset 0 0 0 1px #d9c7ff88,inset 0 0 10px 2px #b79bff66,inset 0 4px 6px #ffffff55,0 0 16px 3px #7a4dff66,0 0 34px 6px #4d2fd055;
  overflow:hidden;transform:scale(var(--s,1));transition:transform .08s;isolation:isolate}
@@ -27,73 +27,154 @@ body.idle #core{animation-duration:4s}
 <script src="voices.js"></script>
 <script>
 const $=id=>document.getElementById(id),B=$("bubble"),O=$("orb"),sleep=ms=>new Promise(r=>setTimeout(r,ms));
-let C={perms:{}},stream,ac,an,buf,cmdReq=false,busy=false,active=false,shown=false,lv=0,typer,audio,speaking=false,lastAct=Date.now(),warned=false;
+let playRes=null,curCancel=null,C={perms:{}},stream,ac,an,tbuf,fbuf,busy=false,active=false,shown=false,lv=0,audio,speaking=false,lastAct=Date.now(),enrolling=false,epoch=0;
 const cls=s=>document.body.className=s;
+const OSZ={small:"64px",medium:"92px",large:"124px"};
+const applyCfg=()=>document.documentElement.style.setProperty("--osz",OSZ[C.orbSize]||OSZ.small);
 function show(){if(!shown){shown=true;P.ov(true)}}
 function text(me,t){B.classList.remove("hide");B.innerHTML="";if(me){const a=document.createElement("div");a.className="me";a.textContent=me;B.append(a)}const d=document.createElement("div");d.textContent=t||"";B.append(d);return d}
-function stopSpeech(){clearInterval(typer);speechSynthesis.cancel();if(audio){audio.onended=audio.onerror=null;audio.pause();audio=null}speaking=false}
-function dismiss(){stopSpeech();active=false;cmdReq=false;shown=false;B.classList.add("hide");cls("idle");P.ov(false)}
-O.onclick=()=>{if(speaking){stopSpeech();cls("listening")}else dismiss()};
+function stopSpeech(){epoch++;speechSynthesis.cancel();if(audio){audio.onended=audio.onerror=null;audio.pause();audio=null}if(playRes){playRes();playRes=null}speaking=false}
+function endSession(){stopSpeech();active=false;shown=false;B.classList.add("hide");cls("idle");P.ov(false)}
+O.onclick=()=>{if(speaking){stopSpeech();cls("listening")}else endSession()};
+
+/* ---------- microphone ---------- */
 async function mic(){if(stream&&stream.active)return true;
- try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});ac=new AudioContext();const s=ac.createMediaStreamSource(stream);an=ac.createAnalyser();an.fftSize=512;s.connect(an);buf=new Uint8Array(512);return true}catch{return false}}
-function level(){an.getByteTimeDomainData(buf);let s=0;for(const v of buf)s+=((v-128)/128)**2;return Math.sqrt(s/buf.length)}
+ try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+  ac=new AudioContext();const s=ac.createMediaStreamSource(stream);an=ac.createAnalyser();an.fftSize=2048;an.smoothingTimeConstant=.2;s.connect(an);
+  tbuf=new Uint8Array(an.fftSize);fbuf=new Float32Array(an.frequencyBinCount);return true}catch{return false}}
+function level(){an.getByteTimeDomainData(tbuf);let s=0;for(const v of tbuf)s+=((v-128)/128)**2;return Math.sqrt(s/tbuf.length)}
 (function f(){O.style.setProperty("--s",shown&&document.body.className==="listening"?1+Math.min(lv*3,.25):1);requestAnimationFrame(f)})();
-function record(wake){return new Promise(res=>{
- const mr=new MediaRecorder(stream,{mimeType:"audio/webm;codecs=opus"}),ch=[];let spoke=false,q=0,sp=0,t0=Date.now();
- mr.ondataavailable=e=>ch.push(e.data);mr.start();
- const iv=setInterval(()=>{const r=level();lv=r;if(r>.035){spoke=true;q=0;sp+=50}else if(spoke)q+=50;const el=Date.now()-t0;
-  if(!spoke&&el>4000){clearInterval(iv);mr.onstop=()=>res("again");mr.stop();return}
-  if((spoke&&q>1000)||(spoke&&el>15000)){clearInterval(iv);mr.onstop=()=>res(sp>=300?new Blob(ch,{type:"audio/webm"}):null);mr.stop()}},50)})}
+
+/* ---------- basic voice print: average spectrum shape on 40 log-spaced bands (not security-grade) ---------- */
+let BANDS=null;
+function bands(){if(BANDS)return BANDS;const nyq=ac.sampleRate/2,n=fbuf.length,lo=80,hi=5000,out=[];
+ for(let i=0;i<40;i++){const a=lo*Math.pow(hi/lo,i/40),b=lo*Math.pow(hi/lo,(i+1)/40);out.push([Math.max(1,Math.floor(a/nyq*n)),Math.max(2,Math.ceil(b/nyq*n))])}return BANDS=out}
+function newRec(){const mr=new MediaRecorder(stream,{mimeType:"audio/webm;codecs=opus"}),R={mr,ch:[],t0:Date.now(),sum:new Float64Array(40),n:0};mr.ondataavailable=e=>R.ch.push(e.data);mr.start();return R}
+function vecAdd(R){an.getFloatFrequencyData(fbuf);const bs=bands();for(let i=0;i<40;i++){let s=0,c=0;for(let k=bs[i][0];k<bs[i][1];k++){const v=fbuf[k];if(isFinite(v)){s+=v;c++}}R.sum[i]+=c?s/c:-100}R.n++}
+function unit(v){let m=0;for(const x of v)m+=x;m/=v.length;const o=v.map(x=>x-m);let n=0;for(const x of o)n+=x*x;n=Math.sqrt(n)||1;return o.map(x=>x/n)}
+const vecOf=R=>R.n>=6?unit(Array.from(R.sum,x=>x/R.n)):null;
+const cosv=(a,b)=>{let s=0;for(let i=0;i<a.length;i++)s+=a[i]*b[i];return s};
+
+/* listen(R): follow one utterance. waitMs = give up if nobody speaks. Resolves {blob,vec} | null (too short) | "again" (silence) */
+function listen(R,waitMs,pre){return new Promise(res=>{
+ let spoke=!!pre,q=0,sp=pre?350:0;
+ curCancel=()=>{clearInterval(iv);curCancel=null;R.mr.onstop=()=>res("again");try{R.mr.stop()}catch{res("again")}};
+ const iv=setInterval(()=>{const r=level();lv=r;const talk=r>.035;
+  if(talk){spoke=true;q=0;sp+=50;vecAdd(R)}else if(spoke)q+=50;const el=Date.now()-R.t0;
+  const fin=(v)=>{clearInterval(iv);curCancel=null;R.mr.onstop=()=>res(v());R.mr.stop()};
+  if(!spoke&&el>waitMs)return fin(()=>"again");
+  if((spoke&&q>750)||(spoke&&el>20000))fin(()=>sp>=300?{blob:new Blob(R.ch,{type:"audio/webm"}),vec:vecOf(R)}:null)},50)})}
+
+/* ---------- main loop ---------- */
 async function main(){
- if(busy)return;busy=true;
+ if(busy||enrolling)return;busy=true;
  try{while(true){
-  if(!C.key||(!C.wake&&!active&&!cmdReq))break;
-  if(!C.perms.mic){if(!warned){warned=true;show();text("","Open Paru → Permissions and allow the microphone.");await sleep(5000);dismiss()}break}
-  if(!await mic()){show();text("","Microphone is blocked in Windows settings.");await sleep(5000);dismiss();break}
-  if(cmdReq){active=true;cmdReq=false;lastAct=Date.now()}
+  if(!C.key)break;
+  if(!C.wake&&!active)break;                     // background listening is off and no session is open
+  if(!C.perms.mic){if(active){show();text("","Allow the microphone: Paru → Settings → Permissions.");await sleep(6000);endSession()}break}
+  if(!await mic()){if(active){show();text("","Microphone is blocked in Windows → Privacy → Microphone.");await sleep(6000);endSession()}break}
   const wake=!active;
   if(!wake){show();if(!speaking)cls("listening");if(!B.textContent)text("","Listening…")}
-  const seg=await record(wake);
-  if(seg==="again"||!seg){if(active&&C.autoHide>0&&Date.now()-lastAct>C.autoHide*1000)dismiss();continue}
+  const R=pendingRec||newRec();const pre=!!pendingRec;pendingRec=null;if(pre)R.t0=Date.now();
+  const seg=await listen(R,wake?4000:3000,pre);
+  if(seg==="again"){if(active&&C.autoHide>0&&Date.now()-lastAct>C.autoHide*1000)endSession();continue}
+  if(!seg)continue;
+  if(wake&&C.voiceLock&&C.voiceprint&&seg.vec&&cosv(seg.vec,C.voiceprint)<(C.voiceThr||.9))continue;   // not my voice
   if(!wake)cls("thinking");
-  const r=await P.api("/voice/audio?wake="+(wake?1:0),"POST",await seg.arrayBuffer(),"audio/webm");
-  if(r.error){if(!wake){text("",r.error==="unreachable"?"I can't reach the agent.":"Wrong key. Open Paru → Settings.");await sleep(3500)}else await sleep(3000);continue}
+  const my=epoch;
+  const r=await P.api("/voice/audio?wake="+(wake?1:0),"POST",await seg.blob.arrayBuffer(),"audio/webm");
+  if(my!==epoch&&!wake)continue;                  // user interrupted / dismissed while this was being understood
+  if(r.error){if(!wake){show();text("",r.error==="unreachable"?"I can't reach the agent.":"Wrong key. Open Paru → Settings.");cls("listening");await sleep(3500);text("","Listening…")}else await sleep(3000);continue}
   if(wake&&r.mode==="offline")continue;
-  if(isStop(r.heard)||(r.action&&r.action.type==="stop")){if(active||r.heard)dismiss();continue}
-  if(wake&&!r.text&&(!r.action||r.action.type==="none"))continue;   // not addressed to Paru
+  const a=r.action||{type:"none"};
+  if(isStop(r.heard)||a.type==="stop"){if(active||wake&&r.heard){endSession()}continue}
+  if(a.type==="sleep"){await P.setCfg({wake:false});if(r.text){show();await speak(r.text,text(r.heard,""),r.lang)}endSession();break}
+  if(wake&&!r.text&&a.type==="none")continue;     // was not addressed to Paru
   active=true;lastAct=Date.now();show();const d=text(r.heard,"");cls("thinking");
-  let out=r.text||"";const a=r.action||{type:"none"};
+  let out=r.text||"";
   if(a.type==="change_voice")out=await changeVoice(a.target,r.lang,out);
-  else if(a.type!=="none"&&a.type!=="check_mail"&&a.type!=="daily_report"&&a.type!=="draft_reply"){
+  else if(a.type==="set_setting")out=await setSetting(a.target,out);
+  else if(a.type==="open_settings"){P.openMain(a.target||"general");out=out||"Opening settings."}
+  else if(!/^(none|check_mail|check_calendar|daily_report|draft_reply|complete_task)$/.test(a.type)){
    const res=await P.act(a.type,a.target);
-   if(/^no-permission/.test(res))out="I don't have permission for that yet. Open Paru → Permissions to allow it.";
-   else if(res==="denied")out="Okay, I won't.";else if(res==="blocked"||res==="failed"||res==="notfound"||res==="toobig")out="Sorry, I couldn't do that.";
+   if(/^no-permission/.test(res))out="I don't have permission for that yet. Open Paru, then Settings, then Permissions.";
+   else if(res==="denied")out="Okay, I won't.";else if(["blocked","failed","notfound","toobig"].includes(res))out="Sorry, I couldn't do that.";
    else if(!out)out="Okay."}
   if(out)await speak(out,d,r.lang);
-  lastAct=Date.now();cls(active?"listening":"idle");      // stay open: keep listening until you say "shut up"
+  lastAct=Date.now();if(active&&!pendingRec)cls("listening");      // stay open and keep listening until you say "shut up"
  }}finally{busy=false}}
+
+/* ---------- voice control of the app's own settings ---------- */
+const COL={blue:"#5a8bff",pink:"#ff5fa8",green:"#36d399",purple:"#9b6bff",orange:"#ff9f43",red:"#ff5f57",teal:"#1ce6d1",yellow:"#f7c948"};
+async function setSetting(t,out){
+ const [k,v0]=String(t||"").split("=");const key=(k||"").trim().toLowerCase(),v=(v0||"").trim().toLowerCase();let c=null;
+ if(key==="theme"&&/^(dark|light|system)$/.test(v))c={theme:v};
+ else if(key==="speed")c={rate:v==="slower"?-20:v==="faster"?15:0};
+ else if(key==="language")c={lang:v||"auto"};
+ else if(key==="wake")c={wake:/^(on|true|yes)$/.test(v)};
+ else if(key==="autohide")c={autoHide:v==="never"?0:parseInt(v)||0};
+ else if(key==="orbsize"&&OSZ[v])c={orbSize:v};
+ else if(key==="accent")c={accent:COL[v]||(/^#[0-9a-f]{6}$/.test(v)?v:null)};
+ else if(key==="closing")c={closeQuits:v==="quit"};
+ else if(key==="voicelock")c={voiceLock:/^(on|true|yes)$/.test(v)};
+ if(!c||Object.values(c).includes(null))return out||"Sorry, I can't change that.";
+ await P.setCfg(c);C={...C,...c};applyCfg();return out||"Done."}
 async function changeVoice(t,lang,out){
  lang=(lang||"en").slice(0,2);const pool=PARU_VOICES.all.filter(v=>v.lang===lang);if(!pool.length)return out;
- let i=pool.findIndex(v=>v.id===C.voice),n=parseInt(t);
- if(n>0&&pool[n-1])i=n-1;else if(/^(male|man)$/i.test(t)){const m=pool.filter(v=>v.g==="M");i=pool.indexOf(m[(m.indexOf(pool[i])+1)%m.length]||m[0])}
- else if(/^(female|woman)$/i.test(t)){const m=pool.filter(v=>v.g==="F");i=pool.indexOf(m[(m.indexOf(pool[i])+1)%m.length]||m[0])}
- else i=(i+1)%pool.length;
+ let i=Math.max(0,pool.findIndex(v=>v.id===C.voice)),n=parseInt(t);const g=/^(male|man)$/i.test(t)?"M":/^(female|woman)$/i.test(t)?"F":null;
+ if(n>0&&pool[n-1])i=n-1;else if(g){const m=pool.filter(v=>v.g===g);i=pool.indexOf(m[(m.indexOf(pool[i])+1)%m.length]||m[0])}else i=(i+1)%pool.length;
  await P.setCfg({voice:pool[i].id});C.voice=pool[i].id;return out||("Voice "+(i+1)+": "+pool[i].name)}
-async function tts(t,lang){
- const v=PARU_VOICES.pick(lang,C.voice);
- const r=await P.api("/voice/tts?text="+encodeURIComponent(t)+"&voice="+v.id+"&rate="+(C.rate||0),"GET",null,null,true);
- if(!r||r.error||!r.audio)return null;return URL.createObjectURL(new Blob([r.audio],{type:"audio/mpeg"}))}
+
+/* ---------- speaking: sentences are fetched in parallel and played as soon as the first is ready ---------- */
+const getTts=(t,lang)=>{const v=PARU_VOICES.pick(lang,C.voice);
+ return P.api("/voice/tts?text="+encodeURIComponent(t)+"&voice="+v.id+"&rate="+(C.rate||0),"GET",null,null,true)
+  .then(r=>r&&r.audio?URL.createObjectURL(new Blob([r.audio],{type:"audio/mpeg"})):null).catch(()=>null)};
+let pendingRec=null;
 async function speak(t,d,lang){
- speaking=true;cls("speaking");clearInterval(typer);const w=t.split(/\s+/);let i=0,ms=130;
- const show_=(iv)=>{clearInterval(typer);typer=setInterval(()=>{i++;d.textContent=w.slice(0,i).join(" ");B.scrollTop=1e9;if(i>=w.length)clearInterval(typer)},iv)};
- const done=()=>{clearInterval(typer);d.textContent=t;speaking=false;audio=null};
- const url=await tts(t,lang);if(!speaking)return;
- if(url){await new Promise(res=>{audio=new Audio(url);
-   audio.onloadedmetadata=()=>show_(Math.max(70,Math.min(260,(audio.duration*1000)/w.length)));
-   audio.onended=audio.onerror=()=>{URL.revokeObjectURL(url);res()};audio.play().catch(res);show_(ms)});done();return}
- // fallback: built-in Windows voice (works offline)
- await new Promise(res=>{const u=new SpeechSynthesisUtterance(t);u.lang=lang||"en";const vs=speechSynthesis.getVoices();
-  const vv=vs.find(x=>x.lang.toLowerCase().startsWith((lang||"en").slice(0,2)));if(vv)u.voice=vv;u.onend=u.onerror=res;show_(ms);speechSynthesis.speak(u)});done()}
-(async()=>{C=await P.cfg();P.onCfg(c=>{C=c;main()});
- P.onTalk(()=>{stopSpeech();cmdReq=true;active=true;show();text("","Listening…");cls("listening");main()});main()})();
+ const my=++epoch;speaking=true;cls("speaking");
+ const parts=(t.match(/[^.!?।。！？]+[.!?।。！？]*/g)||[t]).map(x=>x.trim()).filter(Boolean);
+ const jobs=parts.map(p=>getTts(p,lang));            // all requested at once
+ // barge-in: if you start talking over Paru, stop and listen (adaptive to speaker bleed)
+ let watch=null,R=null;
+ if(C.interrupt&&C.perms.mic&&stream&&stream.active&&active){R=newRec();let base=0,hot=0,t0=Date.now();
+  watch=setInterval(()=>{const l=level();if(Date.now()-t0<500){base=Math.max(base,l);return}
+   if(l>Math.max(.09,base*2.6+.03)){if(++hot>=6){clearInterval(watch);watch=null;pendingRec=R;R=null;stopSpeech();speaking=false}}else hot=0},50)}
+ let shownTxt="";
+ for(let i=0;i<parts.length&&my===epoch;i++){
+  shownTxt+=(i?" ":"")+parts[i];d.textContent=shownTxt;B.scrollTop=1e9;
+  const url=await jobs[i];if(my!==epoch)break;
+  if(url){await new Promise(res=>{playRes=res;audio=new Audio(url);audio.onended=audio.onerror=()=>{playRes=null;URL.revokeObjectURL(url);res()};audio.play().catch(()=>{playRes=null;res()})})}
+  else{await new Promise(res=>{const u=new SpeechSynthesisUtterance(parts[i]);u.lang=lang||"en";const vs=speechSynthesis.getVoices();
+    const vv=vs.find(x=>x.lang.toLowerCase().startsWith((lang||"en").slice(0,2)));if(vv)u.voice=vv;u.onend=u.onerror=res;speechSynthesis.speak(u);setTimeout(res,2500+parts[i].length*110)})}}
+ if(watch)clearInterval(watch);
+ if(R){try{R.mr.onstop=null;R.mr.stop()}catch{}}      // nobody interrupted: drop the helper recording
+ if(my===epoch){d.textContent=t;speaking=false;audio=null}}
+
+/* ---------- teach Paru my voice (3 short phrases) ---------- */
+async function enroll(){
+ if(enrolling)return;enrolling=true;stopSpeech();
+ const res=m=>{enrolling=false;P.enrollDone(m);endSession()};
+ try{
+  if(!C.perms.mic||!await mic())return res({ok:false,msg:"Allow the microphone first (Settings → Permissions)."});
+  active=true;show();const vs=[];
+  const lines=["Hello Paru, this is my voice.","Paru, please check my mail and my tasks.","Good morning Paru, what is on my calendar today?"];
+  for(let i=0;i<3;i++){
+   const d=text("Step "+(i+1)+" of 3","Say: “"+lines[i]+"”");cls("listening");
+   if(i===0){const bak=C.interrupt;C.interrupt=false;await speak("Hi, I am Paru. Let me learn your voice. Please say what you see on the screen.",text("Step 1 of 3","Say: “"+lines[0]+"”"),"en");C.interrupt=bak;pendingRec=null}
+   cls("listening");const seg=await listen(newRec(),9000);
+   if(!seg||seg==="again"||!seg.vec){i--;text("","I did not hear you. Please try again.");await sleep(1200);continue}
+   vs.push(seg.vec);text("","Got it.");await sleep(500)}
+  const tpl=unit(vs[0].map((_,k)=>vs.reduce((a,v)=>a+v[k],0)/vs.length));
+  const sims=vs.map(v=>cosv(v,tpl)),thr=Math.max(.6,Math.min(.97,Math.min(...sims)-.04));
+  await P.setCfg({voiceprint:tpl,voiceThr:+thr.toFixed(3)});C.voiceprint=tpl;C.voiceThr=thr;
+  await speak("Thank you. I will remember your voice.",text("","Thank you. I will remember your voice."),"en");
+  res({ok:true,msg:"Voice saved."})
+ }catch(e){res({ok:false,msg:"Training failed: "+e.message})}}
+
+(async()=>{C=await P.cfg();applyCfg();P.onCfg(c=>{C=c;applyCfg();main()});
+ P.onEnroll(()=>{if(curCancel)curCancel();enroll()});
+ P.onTalk(async()=>{if(enrolling)return;if(active&&shown){endSession();return}       // hotkey again = close the session
+  if(!C.perms.mic){show();text("","Allow the microphone: Paru → Settings → Permissions.");await sleep(6000);if(!active)endSession();return}
+  stopSpeech();active=true;lastAct=Date.now();show();text("","Listening…");cls("listening");if(curCancel)curCancel();main()});
+ main()})();
 </script></body></html>

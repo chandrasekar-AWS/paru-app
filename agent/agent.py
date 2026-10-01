@@ -59,7 +59,8 @@ try:
     TZ = ZoneInfo(E("TIMEZONE", "Asia/Kolkata"))
 except Exception:
     TZ = ZoneInfo("UTC")
-REPORT_HOUR = int(E("REPORT_HOUR", "20") or 20)
+REPORT_HOUR = int(E("REPORT_HOUR", "17") or 17)
+CAL_URLS = [x.strip() for x in E("CALENDAR_ICS_URL", "").split(",") if x.strip()]
 AUTO_REPLY_LOW = E("AUTO_REPLY_LOW", "false").lower() == "true"
 
 G_ID, G_SECRET, G_REFRESH = E("GOOGLE_CLIENT_ID", ""), E("GOOGLE_CLIENT_SECRET", ""), E("GOOGLE_REFRESH_TOKEN", "")
@@ -165,15 +166,19 @@ def friendly(e):
     return "Something went wrong: " + t[:200]
 
 
-async def gemini(messages, system="", as_json=True):
+async def gemini(messages, system="", as_json=True, fast=False):
     """Call Gemini. If a model is busy/unavailable, automatically try the next one."""
     global MODEL
     body = {"contents": messages, "generationConfig": {"temperature": 0.3 if as_json else 0.5}}
+    if fast:
+        body["generationConfig"]["maxOutputTokens"] = 500
     if as_json:
         body["generationConfig"]["responseMimeType"] = "application/json"
     if system:
         body["systemInstruction"] = {"parts": [{"text": system}]}
     cands = await model_candidates()
+    if fast:   # voice: the small "lite" models answer fastest
+        cands = sorted(cands, key=lambda n: 0 if "lite" in n else 1)
     last = "no answer"
     for rnd in range(3):
         for model in list(cands):
@@ -190,7 +195,7 @@ async def gemini(messages, system="", as_json=True):
                     last = f"Gemini gave no answer: {r.text[:150]}"
                     continue
                 MODEL = model
-                if cands and cands[0] != model:
+                if not fast and cands and cands[0] != model:
                     cands.remove(model); cands.insert(0, model)
                 return text
             last = f"Gemini {r.status_code}: {r.text[:200]}"
@@ -519,6 +524,150 @@ def invoices_text():
         for r in rows)
 
 
+# ------------------------------------------------------------------ calendar (Google Calendar secret iCal link)
+import time as _time
+_CAL = {"t": 0, "ev": []}
+_CAL_SNAPSHOT = {}
+
+
+def _unfold(txt):
+    return re.sub(r"\r?\n[ \t]", "", txt).splitlines()
+
+
+def _ics_dt(val, params):
+    val = val.strip()
+    if re.fullmatch(r"\d{8}", val):
+        return datetime.strptime(val, "%Y%m%d").replace(tzinfo=TZ), True
+    z = val.endswith("Z")
+    d = datetime.strptime(val.rstrip("Z"), "%Y%m%dT%H%M%S")
+    if z:
+        from datetime import timezone
+        return d.replace(tzinfo=timezone.utc).astimezone(TZ), False
+    m = re.search(r"TZID=([^;:]+)", params)
+    try:
+        tz = ZoneInfo(m.group(1)) if m else TZ
+    except Exception:
+        tz = TZ
+    return d.replace(tzinfo=tz).astimezone(TZ), False
+
+
+def parse_ics(txt, start, end):
+    """Events between start and end (aware datetimes). Handles simple DAILY/WEEKLY/MONTHLY/YEARLY repeats."""
+    out, cur = [], None
+    for ln in _unfold(txt):
+        if ln == "BEGIN:VEVENT":
+            cur = {}
+        elif ln == "END:VEVENT" and cur is not None:
+            try:
+                if "DTSTART" in cur:
+                    st, allday = _ics_dt(cur["DTSTART"][1], cur["DTSTART"][0])
+                    en = _ics_dt(cur["DTEND"][1], cur["DTEND"][0])[0] if "DTEND" in cur else st + timedelta(hours=1)
+                    dur = en - st
+                    title = (cur.get("SUMMARY", ("", "(no title)"))[1]).replace("\\,", ",").replace("\\n", " ")
+                    where = (cur.get("LOCATION", ("", ""))[1]).replace("\\,", ",")
+                    starts = [st]
+                    rr = cur.get("RRULE", ("", ""))[1]
+                    if rr:
+                        r = dict(x.split("=", 1) for x in rr.split(";") if "=" in x)
+                        step = int(r.get("INTERVAL", 1))
+                        until = None
+                        if "UNTIL" in r:
+                            try:
+                                until = _ics_dt(r["UNTIL"], "")[0] + timedelta(days=1)
+                            except Exception:
+                                pass
+                        starts = []
+                        d0, n = st, 0
+                        while d0 <= end and n < 2000 and (not until or d0 <= until):
+                            f = r.get("FREQ")
+                            if f == "WEEKLY" and r.get("BYDAY"):
+                                days = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"]
+                                wk0 = d0 - timedelta(days=d0.weekday())
+                                for b in r["BYDAY"].split(","):
+                                    if b[-2:] in days:
+                                        c = wk0 + timedelta(days=days.index(b[-2:]))
+                                        if c >= st:
+                                            starts.append(c)
+                                d0 += timedelta(weeks=step)
+                            elif f == "DAILY":
+                                starts.append(d0); d0 += timedelta(days=step)
+                            elif f == "WEEKLY":
+                                starts.append(d0); d0 += timedelta(weeks=step)
+                            elif f == "MONTHLY":
+                                starts.append(d0)
+                                mo = d0.month - 1 + step
+                                try:
+                                    d0 = d0.replace(year=d0.year + mo // 12, month=mo % 12 + 1)
+                                except ValueError:
+                                    d0 += timedelta(days=30 * step)
+                            elif f == "YEARLY":
+                                starts.append(d0)
+                                try:
+                                    d0 = d0.replace(year=d0.year + step)
+                                except ValueError:
+                                    d0 += timedelta(days=365 * step)
+                            else:
+                                break
+                            n += 1
+                    ex = set()
+                    if "EXDATE" in cur:
+                        for v in cur["EXDATE"][1].split(","):
+                            try:
+                                ex.add(_ics_dt(v, cur["EXDATE"][0])[0])
+                            except Exception:
+                                pass
+                    for a in starts:
+                        if a in ex:
+                            continue
+                        if a < end and a + dur > start:
+                            out.append({"start": a, "end": a + dur, "title": title, "where": where, "allday": allday})
+            except Exception:
+                pass
+            cur = None
+        elif cur is not None and ":" in ln:
+            k, _, v = ln.partition(":")
+            name, _, params = k.partition(";")
+            if name in ("DTSTART", "DTEND", "SUMMARY", "LOCATION", "RRULE", "EXDATE"):
+                cur[name] = (params, v)
+    return sorted({(e["start"], e["title"]): e for e in out}.values(), key=lambda e: e["start"])
+
+
+async def calendar_events(start, end):
+    if not CAL_URLS:
+        return None
+    if _time.time() - _CAL["t"] > 600:
+        txts = []
+        for u in CAL_URLS:
+            try:
+                r = await http.get(u, follow_redirects=True, timeout=20)
+                if r.status_code == 200:
+                    txts.append(r.text)
+            except Exception as e:
+                log("error", f"calendar: {e}")
+        _CAL["txt"], _CAL["t"] = txts, _time.time()
+    ev = []
+    for t in _CAL.get("txt", []):
+        ev += parse_ics(t, start, end)
+    return sorted(ev, key=lambda e: e["start"])
+
+
+def fmt_events(ev):
+    if ev is None:
+        return "Calendar not connected"
+    if not ev:
+        return "none"
+    return "; ".join((e["start"].strftime("%a %d %b ") + ("all day" if e["allday"] else e["start"].strftime("%I:%M %p")) + " " + e["title"]
+                      + (f" ({e['where']})" if e["where"] else "")) for e in ev[:12])
+
+
+async def calendar_text():
+    n = now()
+    d0 = n.replace(hour=0, minute=0, second=0, microsecond=0)
+    txt = fmt_events(await calendar_events(d0, d0 + timedelta(days=3)))
+    _CAL_SNAPSHOT["txt"] = txt
+    return txt
+
+
 def context_text():
     """Short snapshot of everything, used by chat and voice."""
     L = [f"Now: {now().strftime('%A %Y-%m-%d %H:%M')}", tasks_text(), invoices_text()]
@@ -582,14 +731,19 @@ def report_data(since):
             "select * from invoices where status='pending'")],
         "invoices_overdue": [f"{r['client']} ₹{r['amount']:,.0f} due {r['due']}" for r in g(
             "select * from invoices where status='pending' and due<?", (today,))],
+        "owner_talked_with_paru": [f"{r['ts']} {r['who']}: {r['text'][:140]}" for r in g(
+            "select * from chat where ts>=? order by id limit 60", (since[:16],))],
+        "tasks_added_by_owner": [r["title"] for r in g(
+            "select * from tasks where who='me' and created>=?", (since,))],
         "agent_activity_log": [f"{r['ts']} {r['kind']}: {r['text']}" for r in g(
             "select * from log where ts>=? and kind!='error' order by id limit 60", (since,))],
         "errors": [r["text"] for r in g("select * from log where ts>=? and kind='error' limit 5", (since,))],
     }
 
 
-REPORT_SYS = ("You write a clear, friendly business report for " + OWNER_NAME + " in English. Use Markdown with these sections: "
-              "1) Summary  2) What the agent did (its tasks)  3) Your tasks  4) Our activity together  "
+REPORT_SYS = ("You write a clear, friendly business report for " + OWNER_NAME + " in English covering the 24 hours from period_since "
+              "(yesterday 5 PM) to now (5 PM). Use Markdown with these sections: "
+              "1) Summary  2) What the agent did (its tasks)  3) What you did (your tasks and talks with Paru)  4) Our activity together  "
               "5) Task completion  6) Client chats  7) Deadlines & invoices  8) Suggested focus for tomorrow. "
               "Use only the data given, never invent anything. Keep it under 450 words.")
 
@@ -638,9 +792,19 @@ async def send_report(title, since, fname):
         await say(f"⚠️ Could not save to Drive: {e}")
 
 
+def report_window_start():
+    """Start of the 24h window that ends at the last REPORT_HOUR:00 (e.g. yesterday 5 PM -> today 5 PM)."""
+    n = now()
+    end = n.replace(hour=REPORT_HOUR, minute=0, second=0, microsecond=0)
+    if n < end:
+        end -= timedelta(days=1)
+    return (end - timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
+
+
 async def daily_report():
     d = now().strftime("%Y-%m-%d")
-    await send_report("Daily report", d + " 00:00:00", f"Daily-Report-{d}.md")
+    await send_report("Daily report (5 PM to 5 PM)" if REPORT_HOUR == 17 else "Daily report",
+                      report_window_start(), f"Daily-Report-{d}.md")
 
 
 async def weekly_digest():
@@ -1108,6 +1272,22 @@ async def voice_history(request: Request):
     return {"items": [{"ts": r[0], "who": r[1], "text": r[2]} for r in reversed(rows)]}
 
 
+@app.get("/voice/tasks")
+async def voice_tasks(request: Request):
+    if not key_ok(request):
+        return JSONResponse({"error": "wrong key"}, status_code=401)
+    rows = db.execute("select id,title,who,due,status,created from tasks order by status='done', id desc limit 80").fetchall()
+    return {"items": [dict(r) for r in rows]}
+
+
+@app.post("/voice/report")
+async def voice_report(request: Request):
+    if not key_ok(request):
+        return JSONResponse({"error": "wrong key"}, status_code=401)
+    await daily_report()
+    return {"ok": True}
+
+
 @app.post("/voice/history/clear")
 async def voice_history_clear(request: Request):
     if not key_ok(request):
@@ -1116,8 +1296,9 @@ async def voice_history_clear(request: Request):
     return {"ok": True}
 
 
-ACTIONS = ("none", "stop", "open_app", "close_app", "open_url", "web_search", "download",
-           "open_folder", "check_mail", "daily_report", "draft_reply", "change_voice")
+ACTIONS = ("none", "stop", "sleep", "open_app", "close_app", "open_url", "web_search", "download",
+           "open_folder", "check_mail", "check_calendar", "daily_report", "draft_reply", "change_voice",
+           "set_setting", "open_settings", "complete_task")
 
 
 def _parse_json(t):
@@ -1131,10 +1312,18 @@ def brain_system(wake):
     return (f"You are {ASSISTANT_NAME}, the personal voice assistant of {OWNER_NAME}. The owner may speak ANY language in the world. "
             f"Write exactly what was said in heard (original script). {gate}"
             "Answer in the SAME language the owner spoke, 1-3 short natural sentences, no markdown, no emojis. "
-            "Use ONLY the snapshot for facts about the owner's work; for general questions use your own knowledge. "
+            "For anything about the owner (email address, mail, calendar, tasks, clients, contacts, invoices) use ONLY the snapshot and NEVER guess or invent; "
+            "if the snapshot lacks it, say you don't have it yet. For general-knowledge questions use your own knowledge. "
+            "You can NOT answer, reject or end phone calls; if asked, say so honestly in one sentence. "
             "Set lang to the ISO 639-1 code of your answer language (en, ta, hi, es, fr...). "
             "ACTIONS (put in action.type, default none): "
             "stop = owner tells you to be quiet/stop/shut up/go away/cancel (any language), answer empty or a very short okay; "
+            "sleep = owner says turn off / go to sleep / stop listening completely / exit (answer a short goodbye); "
+            "check_calendar = owner asks about meetings/events/schedule (answer from the snapshot CALENDAR line); "
+            "complete_task = mark a task done (action.item = task # from the snapshot); "
+            "set_setting = change this app: action.target is key=value with key one of theme(dark|light), speed(slower|normal|faster), "
+            "language(auto or 2-letter code), wake(on|off), autohide(never|30|120|600), orbsize(small|medium|large), accent(a color name or hex), "
+            "closing(background|quit), voicelock(on|off); open_settings = open the settings window (target = section: general, voices, permissions, assistant, keys, customize); "
             "open_app / close_app = open or close a program on the computer (action.target = program name); "
             "open_url = open a website (target = url or domain); web_search = search the web in the browser (target = search query); "
             "download = download a file from a direct url (target = url); open_folder = open Pictures, Videos, Downloads, Documents or Desktop (target = that word); "
@@ -1158,6 +1347,14 @@ async def run_actions(d, ans, lang):
             n = await check_mail()
             ans = await gtext(f"Reply in language code '{lang}' only, 1-2 short plain sentences, no markdown.",
                               f"New emails just fetched: {n}. {msgs_text()}")
+        elif typ == "check_calendar":
+            c = await calendar_text()
+            if not ans:
+                ans = await gtext(f"Reply in language code '{lang}' only, 1-2 short plain sentences, no markdown. Use only this data.", c)
+        elif typ == "complete_task":
+            iid = int(act.get("item") or 0)
+            cur = q("update tasks set status='done', done_at=? where id=? and status='open'", (ts(), iid))
+            ans = ans or ("Done." if cur.rowcount else "I could not find that task.")
         elif typ == "daily_report":
             await daily_report()
         elif typ == "draft_reply":
@@ -1184,9 +1381,13 @@ async def voice_audio(request: Request, lang: str = "auto", wake: int = 0):
         return {"heard": "", "text": "", "mode": "online"}
     mime = request.headers.get("content-type", "audio/webm").split(";")[0]
     try:
+        await calendar_text()
+    except Exception:
+        pass
+    try:
         t = await asyncio.wait_for(gemini([{"role": "user", "parts": [
             {"inline_data": {"mime_type": mime, "data": base64.b64encode(raw).decode()}},
-            {"text": "Transcribe and answer."}]}], brain_system(wake), as_json=True), 35)
+            {"text": "Transcribe and answer."}]}], brain_system(wake), as_json=True, fast=True), 35)
         d = _parse_json(t)
     except Exception as e:
         return {"heard": "", "text": "I can't reach the internet right now.", "mode": "offline"}
@@ -1218,8 +1419,12 @@ async def voice_text(request: Request):
     d = await request.json()
     q_ = str(d.get("text", ""))[:500]
     try:
+        await calendar_text()
+    except Exception:
+        pass
+    try:
         out = _parse_json(await asyncio.wait_for(gemini([{"role": "user", "parts": [{"text": q_}]}],
-                                                        brain_system(False), as_json=True), 30))
+                                                        brain_system(False), as_json=True, fast=True), 30))
         if isinstance(out, dict):
             out["heard"] = q_
     except Exception:
