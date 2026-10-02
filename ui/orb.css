@@ -1,0 +1,24 @@
+/* Paru orb: a glass sphere with swirling ribbons. Colours follow the accent. */
+:root{--acc:#8a6bff;--osz:64px}
+.paru-orb,.paru-bubble{font-family:"Segoe UI Variable Text","Segoe UI",system-ui,"Nirmala UI","Noto Sans","Noto Sans Tamil","Noto Sans Devanagari",sans-serif;-webkit-user-select:none;user-select:none}
+.paru-orb{position:relative;width:var(--osz);height:var(--osz);flex:none;border-radius:50%;cursor:pointer;isolation:isolate;overflow:hidden;
+ background:radial-gradient(circle at 50% 38%,#3b2a8f 0%,#23155f 55%,#150c3d 100%);
+ box-shadow:inset 0 0 0 1px #d9c7ff88,inset 0 0 10px 2px #b79bff66,inset 0 4px 6px #ffffff55,0 0 16px 3px color-mix(in srgb,var(--acc) 45%,transparent),0 0 34px 6px color-mix(in srgb,var(--acc) 30%,transparent);
+ transform:scale(var(--s,1));transition:transform .08s,filter .4s,opacity .4s}
+.paru-orb::after{content:"";position:absolute;inset:0;border-radius:50%;z-index:5;pointer-events:none;background:radial-gradient(ellipse 70% 38% at 50% 6%,#ffffff66,transparent 70%),radial-gradient(circle at 50% 50%,transparent 62%,#c9b3ff55 100%)}
+.paru-orb .p{position:absolute;left:50%;top:50%;width:84%;height:50%;margin:-25% 0 0 -42%;mix-blend-mode:screen;animation:paru-r var(--d) linear infinite;filter:blur(.8px);opacity:.9;border-radius:60% 40% 55% 45%/50% 55% 45% 50%}
+.paru-orb .p:nth-child(1){background:linear-gradient(120deg,#ff4fd8,#b14bff 60%,transparent);--d:7s;transform-origin:62% 50%}
+.paru-orb .p:nth-child(2){background:linear-gradient(60deg,#1ce6d1,#2aa9ff 65%,transparent);--d:9s;animation-direction:reverse;transform-origin:40% 55%}
+.paru-orb .p:nth-child(3){background:linear-gradient(200deg,#5ff3ff,#3a7bff 60%,transparent);--d:6s;transform-origin:55% 45%}
+.paru-orb .p:nth-child(4){background:linear-gradient(300deg,#9b6bff,#ff7ae6 60%,transparent);--d:11s;animation-direction:reverse}
+.paru-orb .core{position:absolute;left:50%;top:50%;width:30%;height:30%;margin:-15% 0 0 -15%;border-radius:50%;z-index:3;background:radial-gradient(#fff 0%,#fff 18%,#bff8ff 40%,#fff0 72%);filter:blur(2px);animation:paru-g 2.6s ease-in-out infinite}
+@keyframes paru-r{from{rotate:0deg}to{rotate:360deg}}@keyframes paru-g{50%{transform:scale(1.25);opacity:.85}}
+.thinking .paru-orb .p,.paru-orb.thinking .p{animation-duration:1.8s}
+.speaking .paru-orb,.paru-orb.speaking{animation:paru-sp .75s ease-in-out infinite}@keyframes paru-sp{50%{transform:scale(1.12)}}
+.off .paru-orb,.paru-orb.off{filter:grayscale(1) brightness(.55);opacity:.8}.off .paru-orb .p,.paru-orb.off .p{animation-play-state:paused}
+.paru-bubble{position:relative;margin-top:12px;max-width:100%;max-height:230px;overflow:auto;scrollbar-width:none;border-radius:18px;padding:11px 16px;font-size:15.5px;line-height:1.4;
+ color:#f4f1ff;background:linear-gradient(180deg,#1c1830ee,#13101fee);border:1px solid #ffffff24;box-shadow:0 10px 30px #0009,inset 0 1px 0 #ffffff1a;transition:opacity .25s,transform .25s;-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+.paru-bubble.hide{opacity:0;transform:translateY(-8px);pointer-events:none}
+.paru-bubble .me{color:#b9aef0;font-weight:500;font-size:12.5px;margin-bottom:3px;letter-spacing:.01em}
+.paru-bubble .me:empty{display:none}.paru-bubble .t{font-weight:560}
+.paru-bubble.light{background:linear-gradient(180deg,#fffffff2,#f3effcf2);color:#2b2161;border-color:#00000014}.paru-bubble.light .me{color:#7a6be0}

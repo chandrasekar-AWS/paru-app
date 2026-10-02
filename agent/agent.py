@@ -19,8 +19,13 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 BASE = os.path.dirname(os.path.abspath(__file__))
+import sys
+sys.path.insert(0, BASE)
+import asr, wake as wakemod                       # local wake-word / "shut up" engine (agent/asr.py, agent/wake.py)
+VERSION = "3.0.0"
 
 
 # ----------------------------------------------------------------- settings
@@ -70,7 +75,7 @@ META_TOKEN, META_SECRET = E("META_PAGE_TOKEN", ""), E("META_APP_SECRET", "")
 TW_SID, TW_TOKEN, TW_FROM, OWNER_PHONE = E("TWILIO_SID", ""), E("TWILIO_TOKEN", ""), E("TWILIO_FROM", ""), E("OWNER_PHONE", "")
 
 http = httpx.AsyncClient(timeout=60)
-GEM = "https://generativelanguage.googleapis.com/v1beta"
+GEM = os.environ.get("GEMINI_BASE", "https://generativelanguage.googleapis.com/v1beta")
 STATE = {"mode": None, "item": None}   # what the bot is waiting for from you
 
 
@@ -126,6 +131,7 @@ def get_item(i):
 
 # ------------------------------------------------------------------- Gemini
 CANDIDATES = []
+THINK0 = {"on": True}      # turned off automatically if a model rejects the setting
 
 
 async def model_candidates():
@@ -171,7 +177,9 @@ async def gemini(messages, system="", as_json=True, fast=False):
     global MODEL
     body = {"contents": messages, "generationConfig": {"temperature": 0.3 if as_json else 0.5}}
     if fast:
-        body["generationConfig"]["maxOutputTokens"] = 500
+        body["generationConfig"]["maxOutputTokens"] = 600
+        if THINK0["on"]:
+            body["generationConfig"]["thinkingConfig"] = {"thinkingBudget": 0}     # voice answers do not need long reasoning: much faster
     if as_json:
         body["generationConfig"]["responseMimeType"] = "application/json"
     if system:
@@ -180,7 +188,7 @@ async def gemini(messages, system="", as_json=True, fast=False):
     if fast:   # voice: the small "lite" models answer fastest
         cands = sorted(cands, key=lambda n: 0 if "lite" in n else 1)
     last = "no answer"
-    for rnd in range(3):
+    for rnd in range(1 if fast else 3):          # voice: answer quickly or fail quickly (the person is waiting)
         for model in list(cands):
             try:
                 r = await http.post(f"{GEM}/models/{model}:generateContent", json=body,
@@ -199,11 +207,16 @@ async def gemini(messages, system="", as_json=True, fast=False):
                     cands.remove(model); cands.insert(0, model)
                 return text
             last = f"Gemini {r.status_code}: {r.text[:200]}"
+            if r.status_code == 400 and THINK0["on"] and "thinking" in r.text.lower():
+                THINK0["on"] = False
+                body["generationConfig"].pop("thinkingConfig", None)
+                continue
             if r.status_code == 404 and len(cands) > 1 and model in cands:
                 cands.remove(model)
             if r.status_code not in (404, 429, 500, 503, 504):
                 raise RuntimeError(last)      # bad key / bad request: retrying will not help
-        await asyncio.sleep(3 * (rnd + 1))
+        if not fast:
+            await asyncio.sleep(3 * (rnd + 1))
     raise RuntimeError(last)
 
 
@@ -1041,6 +1054,7 @@ async def poll():
 @asynccontextmanager
 async def lifespan(app):
     tasks = [asyncio.create_task(f()) for f in (poll, mail_loop, scheduler)]
+    asyncio.create_task(asyncio.to_thread(_warm_asr))          # download/load the local wake-word model in the background
     await say(f"🟢 {ASSISTANT_NAME} is online. Send /help (you can also send voice notes in English or Tamil)")
     yield
     for t in tasks:
@@ -1048,6 +1062,32 @@ async def lifespan(app):
 
 
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"], max_age=600)   # the Android app is a different origin; every route still needs the key
+
+
+def _warm_asr():
+    if os.environ.get("PARU_NO_ASR"):
+        return
+    try:
+        asr.load(BASE)
+        asr.transcribe(BASE, __import__("numpy").zeros(8000, dtype="float32"))     # first call is slow: do it now
+    except Exception as e:
+        print("Local wake-word engine unavailable:", e)
+
+
+@app.get("/health")
+async def health():
+    """No key needed: lets the apps check that the agent is up (and what it can do) without exposing any data."""
+    return {"ok": True, "version": VERSION, "asr": asr.STATUS, "gemini": bool(GEMINI_KEY), "key_set": bool(VOICE_KEY),
+            "tts_fallback": bool(_espeak())}
+
+
+@app.post("/voice/shutdown")
+async def voice_shutdown(request: Request):
+    if not key_ok(request):
+        return JSONResponse({"error": "wrong key"}, status_code=401)
+    asyncio.get_running_loop().call_later(0.3, lambda: os._exit(0))
+    return {"ok": True}
 
 
 @app.get("/")
@@ -1371,27 +1411,158 @@ async def run_actions(d, ans, lang):
     return typ, tgt, ans
 
 
+WK = wakemod.Wake(os.path.join(BASE, "wake_aliases.json"))
+_VERIFY = []          # timestamps of cloud wake checks (kept low: the free Gemini quota is small)
+_CLOUD_WAKE = []
+
+
+def _budget(lst, n, per=60):
+    t = _time.time()
+    lst[:] = [x for x in lst if t - x < per]
+    if len(lst) >= n:
+        return False
+    lst.append(t)
+    return True
+
+
+async def brain_audio(payload, mime, wake):
+    """Gemini hears the audio, answers and picks an action in ONE call."""
+    t = await asyncio.wait_for(gemini([{"role": "user", "parts": [
+        {"inline_data": {"mime_type": mime, "data": base64.b64encode(payload).decode()}},
+        {"text": "Transcribe and answer."}]}], brain_system(wake), as_json=True, fast=True), 25)
+    return _parse_json(t)
+
+
+def _quiet(heard="", **kw):
+    return {"heard": heard, "text": "", "lang": "en", "greeting": False, "action": {"type": "none", "target": ""}, "mode": "local", **kw}
+
+
+async def _gemini_reply(payload, mime, wake, kind=None):
+    if not GEMINI_KEY:
+        return {**_quiet(), "text": "I need a Gemini key to answer. Add it in Paru, Settings, Keys.", "mode": "offline", "kind": kind or "none"}
+    try:
+        d = await brain_audio(payload, mime, wake)
+    except Exception as e:
+        log("error", f"voice: {e}")
+        return {**_quiet(), "text": friendly(e) if "busy" in friendly(e) else "I can't reach the internet right now.", "mode": "offline", "kind": kind or "none"}
+    out = await finish_voice(d)
+    out["kind"] = kind or ("wake" if (out.get("text") or out.get("greeting")) else "none")
+    return out
+
+
 @app.post("/voice/audio")
 async def voice_audio(request: Request, lang: str = "auto", wake: int = 0):
-    """Your recorded voice (any language) -> Gemini hears it and answers + picks an action in ONE call."""
+    """One recorded speech burst (16 kHz mono int16 PCM, or legacy webm).
+    wake=1  Paru is idle: only react to "hello Paru" / "turn off Paru"   (decided locally; the cloud is only used for the request itself)
+    wake=0  a conversation is open: "shut up" / "turn off" are handled locally and instantly, everything else goes to Gemini."""
     if not key_ok(request):
         return JSONResponse({"error": "wrong key"}, status_code=401)
     raw = await request.body()
-    if len(raw) < 1500:
-        return {"heard": "", "text": "", "mode": "online"}
-    mime = request.headers.get("content-type", "audio/webm").split(";")[0]
-    try:
-        await calendar_text()
-    except Exception:
-        pass
-    try:
-        t = await asyncio.wait_for(gemini([{"role": "user", "parts": [
-            {"inline_data": {"mime_type": mime, "data": base64.b64encode(raw).decode()}},
-            {"text": "Transcribe and answer."}]}], brain_system(wake), as_json=True, fast=True), 35)
-        d = _parse_json(t)
-    except Exception as e:
-        return {"heard": "", "text": "I can't reach the internet right now.", "mode": "offline"}
-    return await finish_voice(d)
+    ctype = request.headers.get("content-type", "audio/webm").split(";")[0].lower()
+    is_pcm = ctype in ("audio/l16", "audio/pcm", "application/octet-stream")
+    if len(raw) < (8000 if is_pcm else 1500):                      # < 0.25 s
+        return _quiet(kind="none")
+    idle = bool(wake)
+    if not is_pcm:                                                 # old clients: webm -> cloud only
+        return await _gemini_reply(raw, ctype, idle)
+    dur = len(raw) / 32000
+    wav = asr.pcm_to_wav(raw)
+    st = asr.STATUS["state"]
+
+    if st == "ready":
+        gem = None
+        if not idle and GEMINI_KEY and dur <= 20:                    # open conversation: ask Gemini at the same time as the local check
+            gem = asyncio.create_task(brain_audio(wav, "audio/wav", False))
+        try:
+            text = await asyncio.to_thread(asr.transcribe, BASE, asr.pcm16_to_f32(raw))
+        except Exception as e:
+            log("error", f"asr: {e}")
+            text = ""
+        r = WK.classify(text, session=not idle)
+        k = r["kind"]
+        if k in ("off", "stop") and not idle or (k == "off" and idle):
+            if gem:
+                gem.cancel()
+            typ = "sleep" if k == "off" else "stop"
+            return {**_quiet(text), "action": {"type": typ, "target": ""}, "kind": k}
+        if idle:
+            if k == "wake":
+                if r["rest"].strip() and GEMINI_KEY:                  # "hello Paru, what's the weather": answer in one go
+                    return await _gemini_reply(wav, "audio/wav", True, "wake")
+                return {**_quiet(text), "greeting": True, "kind": "wake"}
+            if k == "weak" and GEMINI_KEY and _budget(_VERIFY, 6):      # looks like a greeting but the name was unclear: one cheap cloud check
+                out = await _gemini_reply(wav, "audio/wav", True)
+                out["verified"] = True
+                return out
+            return _quiet(text, kind="none")
+        # open conversation, not a local command
+        if gem:
+            try:
+                d = await gem
+                out = await finish_voice(d)
+                out["kind"] = "talk"
+                if not out.get("heard"):
+                    out["heard"] = text
+                return out
+            except Exception as e:
+                log("error", f"voice: {e}")
+                return {**_quiet(text), "text": friendly(e) if "busy" in friendly(e) else "I can't reach the internet right now.", "mode": "offline", "kind": "talk"}
+        return {**_quiet(text), "text": "I need a Gemini key to answer. Add it in Paru, Settings, Keys.", "kind": "talk"}
+
+    # local engine not ready (still downloading, or the download failed)
+    if not idle:
+        out = await _gemini_reply(wav, "audio/wav", False)
+        out["kind"] = "talk"
+        return out
+    if st in ("idle", "downloading", "loading"):
+        return _quiet(kind="warming", asr=dict(asr.STATUS))
+    # st == "error": the model could not be downloaded; fall back to the cloud wake check, rate limited
+    if 0.5 <= dur <= 6 and _budget(_CLOUD_WAKE, 8):
+        return await _gemini_reply(wav, "audio/wav", True)
+    return _quiet(kind="none")
+
+
+@app.get("/voice/asr")
+async def voice_asr(request: Request):
+    if not key_ok(request):
+        return JSONResponse({"error": "wrong key"}, status_code=401)
+    return {**asr.STATUS, "aliases": sorted(WK.aliases)}
+
+
+@app.post("/voice/asr/retry")
+async def voice_asr_retry(request: Request):
+    if not key_ok(request):
+        return JSONResponse({"error": "wrong key"}, status_code=401)
+    if asr.STATUS["state"] in ("error", "idle"):
+        asyncio.create_task(asyncio.to_thread(_warm_asr))
+    return asr.STATUS
+
+
+@app.post("/voice/wake/learn")
+async def voice_wake_learn(request: Request):
+    """The person says "hello Paru" a few times. We keep how the recognizer wrote the name for their voice."""
+    if not key_ok(request):
+        return JSONResponse({"error": "wrong key"}, status_code=401)
+    if asr.STATUS["state"] != "ready":
+        return {"error": "engine-not-ready", "asr": dict(asr.STATUS)}
+    d = await request.json()
+    texts = []
+    for b in (d.get("samples") or [])[:8]:
+        try:
+            texts.append(await asyncio.to_thread(asr.transcribe, BASE, asr.pcm16_to_f32(base64.b64decode(b))))
+        except Exception:
+            pass
+    added = WK.learn(texts)
+    ok = [WK.classify(t)["kind"] in ("wake",) for t in texts]
+    return {"heard": texts, "added": added, "recognized": sum(ok), "total": len(texts)}
+
+
+@app.post("/voice/wake/forget")
+async def voice_wake_forget(request: Request):
+    if not key_ok(request):
+        return JSONResponse({"error": "wrong key"}, status_code=401)
+    WK.forget()
+    return {"ok": True}
 
 
 async def finish_voice(d):
@@ -1432,25 +1603,71 @@ async def voice_text(request: Request):
     return await finish_voice(out)
 
 
+def _espeak():
+    import shutil
+    return shutil.which("espeak-ng") or shutil.which("espeak")
+
+
+TTS_DIR = os.path.join(BASE, "cache", "tts")
+
+
+def _tts_cache_path(text, voice, rate):
+    return os.path.join(TTS_DIR, hashlib.sha1(f"{voice}|{rate}|{text}".encode()).hexdigest() + ".mp3")
+
+
+def _tts_cache_trim(keep=300):
+    try:
+        fs = sorted((os.path.join(TTS_DIR, f) for f in os.listdir(TTS_DIR)), key=os.path.getmtime)
+        for f in fs[:-keep]:
+            os.remove(f)
+    except Exception:
+        pass
+
+
 @app.get("/voice/tts")
 async def voice_tts(request: Request, text: str, voice: str = "en-US-AriaNeural", rate: int = 0):
-    """Human-sounding neural voice (Microsoft Edge voices via edge-tts, needs internet)."""
+    """Human-sounding neural voice (Microsoft Edge voices via edge-tts). Repeated phrases come from a cache, so they are instant.
+    Without internet it falls back to espeak-ng when that is installed (the app itself falls back to the system voice)."""
     from fastapi.responses import Response
     if not key_ok(request):
         return JSONResponse({"error": "wrong key"}, status_code=401)
     if not re.fullmatch(r"[A-Za-z]{2,3}-[A-Za-z0-9-]{2,12}Neural|[A-Za-z0-9-]{4,40}", voice):
         return JSONResponse({"error": "bad voice"}, status_code=400)
+    text = text[:1200]
+    cp = _tts_cache_path(text, voice, rate)
+    if os.path.exists(cp):
+        os.utime(cp, None)
+        with open(cp, "rb") as f:
+            return Response(f.read(), media_type="audio/mpeg", headers={"x-cache": "hit"})
     try:
         import edge_tts
-        comm = edge_tts.Communicate(text[:1200], voice, rate=f"{max(-50, min(50, rate)):+d}%")
+        comm = edge_tts.Communicate(text, voice, rate=f"{max(-50, min(50, rate)):+d}%")
         chunks = []
-        async for c in comm.stream():
-            if c["type"] == "audio":
-                chunks.append(c["data"])
+
+        async def pull():
+            async for c in comm.stream():
+                if c["type"] == "audio":
+                    chunks.append(c["data"])
+        await asyncio.wait_for(pull(), 12)
         if not chunks:
             raise RuntimeError("no audio")
-        return Response(b"".join(chunks), media_type="audio/mpeg")
+        data = b"".join(chunks)
+        os.makedirs(TTS_DIR, exist_ok=True)
+        with open(cp, "wb") as f:
+            f.write(data)
+        _tts_cache_trim()
+        return Response(data, media_type="audio/mpeg")
     except Exception as e:
+        exe = _espeak()
+        if exe:
+            try:
+                p = await asyncio.create_subprocess_exec(exe, "-v", voice[:2].lower(), "-s", str(165 + rate), "--stdout", text,
+                                                         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+                out, _ = await asyncio.wait_for(p.communicate(), 10)
+                if out:
+                    return Response(out, media_type="audio/wav", headers={"x-fallback": "espeak"})
+            except Exception:
+                pass
         return JSONResponse({"error": "tts unavailable: " + str(e)[:120]}, status_code=503)
 
 

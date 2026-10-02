@@ -1,15 +1,18 @@
 {
  "name": "paru",
- "version": "2.2.0",
- "description": "Paru assistant",
+ "version": "3.0.0",
+ "description": "Paru voice assistant",
  "main": "main.js",
  "author": "Paru",
+ "license": "MIT",
  "scripts": {
   "start": "electron .",
-  "dist": "electron-builder --win --publish never"
+  "test:e2e": "node test/e2e.js",
+  "dist:win": "electron-builder --win --publish never",
+  "dist:linux": "electron-builder --linux --publish never"
  },
  "devDependencies": {
-  "electron": "33.2.0",
+  "electron": "^33.2.0",
   "electron-builder": "25.1.8"
  },
  "build": {
@@ -18,8 +21,7 @@
   "files": [
    "main.js",
    "preload.js",
-   "voices.js",
-   "*.html",
+   "ui/**",
    "build/**"
   ],
   "extraResources": [
@@ -28,6 +30,8 @@
     "to": "agent",
     "filter": [
      "agent.py",
+     "asr.py",
+     "wake.py",
      "requirements.txt",
      "env.example.txt"
     ]
@@ -35,11 +39,30 @@
   ],
   "win": {
    "target": "nsis",
-   "icon": "build/icon.png"
+   "icon": "build/icon.png",
+   "extraResources": [
+    {
+     "from": "python-win",
+     "to": "python",
+     "filter": [
+      "**/*",
+      "!.keep"
+     ]
+    }
+   ]
   },
   "nsis": {
    "oneClick": true,
    "perMachine": false
+  },
+  "linux": {
+   "target": [
+    "AppImage"
+   ],
+   "icon": "build/icon.png",
+   "category": "Utility",
+   "executableName": "paru",
+   "synopsis": "Voice assistant"
   }
  }
 }
