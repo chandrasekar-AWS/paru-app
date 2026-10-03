@@ -8,7 +8,7 @@ app.whenReady().then(async () => {
   const w = new BrowserWindow({ width: 390, height: 800, show: true, webPreferences: { backgroundThrottling: false, autoplayPolicy: 'no-user-gesture-required' } });
   w.webContents.on('console-message', (e, l, m) => { if (l >= 2) log('console', { msg: m.slice(0, 200) }); });
   await w.loadFile(path.join(A.root, 'ui', 'app.html'));
-  await w.webContents.executeJavaScript(`localStorage.setItem('paru.cfg.v3', JSON.stringify(${JSON.stringify(A.cfg)}));`);
+  await w.webContents.executeJavaScript(`localStorage.setItem('paru.cfg.v3', JSON.stringify(${JSON.stringify(A.cfg)})); localStorage.setItem('paru.session', JSON.stringify({access_token:'a',refresh_token:'r',expires_at:9999999999,user:{email:'t@x.com',name:'T',provider:'email'}}));`);
   await w.loadFile(path.join(A.root, 'ui', 'app.html'));
   const q = async code => w.webContents.executeJavaScript(code);
   let last = '';

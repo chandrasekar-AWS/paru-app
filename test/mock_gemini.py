@@ -23,6 +23,8 @@ class H(BaseHTTPRequestHandler):
 
     def do_POST(self):
         n = int(self.headers.get("Content-Length", 0)); body = json.loads(self.rfile.read(n) or b"{}")
+        if self.path == "/__script":
+            SCRIPT.update(body); return self._send({"ok": True})
         model = self.path.split("/models/")[-1].split(":")[0]
         parts = body["contents"][0]["parts"]; has_audio = any("inline_data" in p for p in parts)
         sysd = body.get("systemInstruction", {}).get("parts", [{}])[0].get("text", "")

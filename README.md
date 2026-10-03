@@ -1,32 +1,39 @@
-# Paru 3
+# Paru 4
 
-A voice assistant for Windows, Arch Linux and Android. Say **"Hello Paru"** and the orb appears.
+A voice assistant for Windows, Arch Linux and Android. You choose the wake word; the orb appears when you say it.
+
+## First launch
+1. **Sign in** with Google or email (Supabase). Only the sign-in uses the internet service; chats, keys, settings and your voice stay on this device.
+2. **Voice**: Paru speaks a phrase, you repeat it, it shows what it heard and learns your voice.
+3. **AI key**: Gemini, ChatGPT/OpenAI, Claude, OpenRouter, Groq, DeepSeek, Mistral, xAI, Together, Ollama, LM Studio, or any OpenAI-compatible address. "Check key" makes a real call, so a fake key is rejected. The key is stored encrypted by your operating system.
+4. **Wake word and off word**: type any phrases, say each three times, test them.
+5. **Permissions**: the first time you ask for a new kind of task Paru asks (out loud and on screen). "Always allow" is remembered, "Allow once" asks again, "No" is respected. Change any of it later in Settings.
 
 | You say | What happens |
 |---|---|
-| "Hello Paru" (or hey / hi / okay Paru) | The orb appears and Paru listens. Add a request in the same breath ("Hello Paru, what's the weather") and it answers straight away. |
-| "Shut up" / "Stop" / "Be quiet" | Paru stops talking and the orb hides. It keeps listening for "Hello Paru". |
-| "Turn off Paru" | Paru stops listening completely and **releases the microphone**. Turn it back on with the switch in the app, the tray icon, or Ctrl+Shift+Space. |
+| your wake word | The orb appears and Paru listens. Add a request in the same breath and it answers straight away. |
+| "shut up" / "stop" / "be quiet" | Paru stops talking and the orb hides. It keeps listening for the wake word. |
+| your off word | Paru stops listening completely and releases the microphone. Turn it on again with the switch in the app, the tray icon, or Ctrl+Shift+Space. |
 
-## How it works (why it is fast)
-* "Hello Paru", "shut up" and "turn off Paru" are recognised **on your computer** by a small offline model (Whisper tiny.en, ~100 MB, downloaded once). No room audio is uploaded, no Gemini quota is used, and "shut up" takes about half a second.
-* Gemini is only asked when you actually make a request. The question is heard and answered in one call, and neural voices are cached so repeated phrases play instantly.
-* Words that sound almost like the wake word go to one cheap cloud check. "Teach Paru my voice" (Settings → Voice recognition) also learns how the recogniser writes the name for *your* voice.
+## Set up sign-in once (the app owner)
+See `config/README.md`: create a free Supabase project, enable Google and Email, add the redirect `http://127.0.0.1:53682/callback`, and put the project URL and anon key in `config/supabase.json` (or paste them into the "Connect sign-in" form the first time Paru starts).
 
 ## Install
-**Windows** – push to GitHub and download `Paru-Windows` from the *Actions* tab (the installer carries its own Python). Or from source: install Node 20 and Python 3.9+, then `npm install && npm start`.
-**Arch Linux** – `./scripts/install-arch.sh` (adds Paru to your app menu), or download the `AppImage` from Actions.
-**Android** – download `Paru-Android-APK` from Actions and install it. In Paru on the PC: Settings → General → *Let my phone connect*, then type the address it shows and the same VOICE_KEY into the phone app. The phone listens while the app is open (the screen is kept awake); it does not listen with the app closed.
+**Arch Linux**: `./scripts/install-arch.sh`, then open Paru from your app menu (or `npm start`).
+**Windows**: push to GitHub and download `Paru-Windows` from the *Actions* tab (the installer carries its own Python).
+**Android**: download `Paru-Android-APK` from Actions. In Paru on the PC: Settings, General, *Let my phone connect*; type the address and key it shows into the phone app. The phone listens while the app is open.
 
-The first start creates Paru's Python environment, generates your VOICE_KEY and downloads the wake-word model. Add your Gemini key in Settings → Keys (free key: aistudio.google.com/apikey).
+## How it works
+Wake word, "shut up" and the off word are recognised **on your computer** by a small offline model (about 100 MB, downloaded once), so no room audio is uploaded and wake costs no AI quota. The AI service is only called for your actual request. Gemini hears your voice directly (best for other languages); other services read text that the offline English listener writes down.
 
-## Tests (what is actually checked)
-`cd test && python -m pytest -q` runs 64 tests: the wake/stop/off matcher, and the agent over real HTTP with real speech clips and a fake Gemini.
-`node test/e2e.js` runs the real Electron app + agent with a recorded microphone: hello Paru → question → spoken answer → shut up → hello Paru → turn off Paru.
-`node test/phone.js` does the same for the phone UI. Needs `npm install`, a Python with `agent/requirements.txt`, and xvfb on Linux.
+## Tests
+`cd test && python -m pytest -q` (83 tests: matcher, custom phrases, providers, agent over HTTP with real speech clips)
+`node --test test/auth.test.js` (sign-in against a stand-in Supabase)
+`node test/setup_e2e.js` (the real app: whole setup wizard, custom wake/off words, the first-time permission flow)
+`node test/e2e.js`, `node test/phone.js` (default "hey Paru" flow on desktop and phone UI)
+These need `npm install`, a Python with `agent/requirements.txt`, and xvfb on Linux.
 
 ## Known limits
-* The wake phrase must include a greeting. "Paru" alone is too unreliable to trust.
-* The recogniser writes "Paru" as "Peru", so saying "hello Peru" also wakes Paru.
-* Wayland: the global Ctrl+Shift+Space key may not work. The tray icon and "Hello Paru" do.
-* Phone: no background listening. Opening PC programs by voice is desktop-only.
+* Near-identical sounds ("hello body" for "hello buddy") cannot be told apart. Short or common wake words work worse than two distinctive words.
+* The phone signs in with email and password (no Google yet) and cannot run programs on the PC for you.
+* Wayland: the global Ctrl+Shift+Space key may not work. The tray icon and your wake word do.

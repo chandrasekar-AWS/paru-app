@@ -54,4 +54,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
       - run: pip install -r agent/requirements.txt pytest
-      - run: cd test && python -m pytest -q test_wake.py
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: cd test && python -m pytest -q test_wake.py test_custom_wake.py
+      - run: node --test test/auth.test.js

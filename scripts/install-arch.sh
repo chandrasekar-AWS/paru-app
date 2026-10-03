@@ -6,7 +6,6 @@ echo "==> Installing system packages (nodejs, npm, python, espeak-ng as an offli
 sudo pacman -S --needed --noconfirm nodejs npm python espeak-ng
 echo "==> Installing Paru's app files"
 npm install --no-audit --no-fund
-node node_modules/electron/install.js
 APP="$(pwd)"
 mkdir -p "$HOME/.local/share/applications" "$HOME/.local/share/icons"
 cp build/icon.png "$HOME/.local/share/icons/paru.png"

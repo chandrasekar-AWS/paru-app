@@ -24,8 +24,8 @@ from fastapi.middleware.cors import CORSMiddleware
 BASE = os.path.dirname(os.path.abspath(__file__))
 import sys
 sys.path.insert(0, BASE)
-import asr, wake as wakemod                       # local wake-word / "shut up" engine (agent/asr.py, agent/wake.py)
-VERSION = "3.0.0"
+import asr, llm, wake as wakemod                       # local wake-word / "shut up" engine (agent/asr.py, agent/wake.py)
+VERSION = "4.0.0"
 
 
 # ----------------------------------------------------------------- settings
@@ -57,6 +57,8 @@ OWNER_NAME = E("OWNER_NAME", "the owner")
 ASSISTANT_NAME = E("ASSISTANT_NAME", "Assistant")
 WAKE_ALIASES = [x.strip() for x in E("WAKE_ALIASES", "").split(",") if x.strip()]
 VOICE_KEY = E("VOICE_KEY", "")
+PROV = {"id": "", "key": "", "base": "", "model": ""}          # the AI service the person chose (set by the app; Gemini from env.txt if nothing was set)
+WAKE_PHRASE = ""
 GMAIL = E("GMAIL_ADDRESS", "")
 GMAIL_PASS = E("GMAIL_APP_PASSWORD", "").replace(" ", "")
 MAIL_EVERY = int(E("EMAIL_CHECK_MINUTES", "5") or 5)
@@ -134,6 +136,24 @@ CANDIDATES = []
 THINK0 = {"on": True}      # turned off automatically if a model rejects the setting
 
 
+def HAVE():
+    """Is any AI service ready to answer?"""
+    if PROV["id"]:
+        return bool(PROV["key"]) or llm.keyless(PROV["id"])
+    return bool(GEMINI_KEY)
+
+
+def is_gemini():
+    return (PROV["id"] or "gemini") == "gemini"
+
+
+def set_provider(pid, key="", base="", model=""):
+    global GEMINI_KEY, MODEL, CANDIDATES
+    PROV.update(id=pid, key=key.strip(), base=base.strip(), model=model.strip())
+    if pid == "gemini":
+        GEMINI_KEY, MODEL, CANDIDATES = key.strip(), model.strip(), []
+
+
 async def model_candidates():
     """Ordered list of models to try: your GEMINI_MODEL first, then newest Flash, then Flash-Lite."""
     global CANDIDATES
@@ -167,14 +187,18 @@ async def model_candidates():
 
 def friendly(e):
     t = str(e)
-    if any(x in t for x in ("503", "429", "UNAVAILABLE", "high demand", "RESOURCE_EXHAUSTED")):
-        return "Gemini AI is busy right now (Google side). Please try again in a minute."
+    if any(x in t for x in ("503", "429", "UNAVAILABLE", "high demand", "RESOURCE_EXHAUSTED", "is busy")):
+        return "The AI service is busy right now. Please try again in a minute."
+    if "401" in t or "rejected the key" in t or "not valid" in t:
+        return "The AI key was rejected. Open Paru, Settings, AI key."
     return "Something went wrong: " + t[:200]
 
 
 async def gemini(messages, system="", as_json=True, fast=False):
-    """Call Gemini. If a model is busy/unavailable, automatically try the next one."""
+    """Call the chosen AI service (Gemini by default). If a Gemini model is busy/unavailable, automatically try the next one."""
     global MODEL
+    if PROV["id"] and PROV["id"] != "gemini":
+        return await llm.chat(http, PROV, messages, system, as_json, fast)
     body = {"contents": messages, "generationConfig": {"temperature": 0.3 if as_json else 0.5}}
     if fast:
         body["generationConfig"]["maxOutputTokens"] = 600
@@ -1078,7 +1102,7 @@ def _warm_asr():
 @app.get("/health")
 async def health():
     """No key needed: lets the apps check that the agent is up (and what it can do) without exposing any data."""
-    return {"ok": True, "version": VERSION, "asr": asr.STATUS, "gemini": bool(GEMINI_KEY), "key_set": bool(VOICE_KEY),
+    return {"ok": True, "version": VERSION, "asr": asr.STATUS, "gemini": HAVE(), "llm": {"provider": PROV["id"] or ("gemini" if GEMINI_KEY else ""), "ready": HAVE(), "hears": is_gemini()}, "key_set": bool(VOICE_KEY),
             "tts_fallback": bool(_espeak())}
 
 
@@ -1338,7 +1362,7 @@ async def voice_history_clear(request: Request):
 
 ACTIONS = ("none", "stop", "sleep", "open_app", "close_app", "open_url", "web_search", "download",
            "open_folder", "check_mail", "check_calendar", "daily_report", "draft_reply", "change_voice",
-           "set_setting", "open_settings", "complete_task")
+           "set_setting", "open_settings", "complete_task", "screenshot", "new_note", "lock_screen")
 
 
 def _parse_json(t):
@@ -1346,8 +1370,8 @@ def _parse_json(t):
 
 
 def brain_system(wake):
-    gate = (f'The owner must start by saying "hello {ASSISTANT_NAME}", "hey {ASSISTANT_NAME}" or just "{ASSISTANT_NAME}" '
-            f'(in ANY language; also heard as {", ".join(WAKE_ALIASES)}). If the speech does not start that way, answer must be empty. '
+    gate = (f'The owner must start by saying "{WAKE_PHRASE or "hey " + ASSISTANT_NAME}" (in ANY language; it may be written a little differently, and also heard as {", ".join(WAKE_ALIASES)}). '
+            'If the speech does not start that way, answer must be empty. '
             'If it is ONLY the greeting with no request, set greeting_only=true and answer with a short "Yes?" in the language spoken. ' if wake else "")
     return (f"You are {ASSISTANT_NAME}, the personal voice assistant of {OWNER_NAME}. The owner may speak ANY language in the world. "
             f"Write exactly what was said in heard (original script). {gate}"
@@ -1367,6 +1391,7 @@ def brain_system(wake):
             "open_app / close_app = open or close a program on the computer (action.target = program name); "
             "open_url = open a website (target = url or domain); web_search = search the web in the browser (target = search query); "
             "download = download a file from a direct url (target = url); open_folder = open Pictures, Videos, Downloads, Documents or Desktop (target = that word); "
+            "screenshot = save a picture of the screen (target empty); new_note = save a note as a text file (target = the note text); lock_screen = lock the computer screen; "
             "check_mail = check the owner's email now; daily_report = build and send today's report; "
             "draft_reply = write a reply draft to a waiting client message (action.item = the # number from the snapshot, action.target = what to say); "
             "change_voice = owner wants a different voice (target = empty, or a number, or male/female). "
@@ -1437,11 +1462,25 @@ def _quiet(heard="", **kw):
     return {"heard": heard, "text": "", "lang": "en", "greeting": False, "action": {"type": "none", "target": ""}, "mode": "local", **kw}
 
 
-async def _gemini_reply(payload, mime, wake, kind=None):
-    if not GEMINI_KEY:
-        return {**_quiet(), "text": "I need a Gemini key to answer. Add it in Paru, Settings, Keys.", "mode": "offline", "kind": kind or "none"}
+async def brain_text(text, wake):
+    """For AI services that cannot hear audio: the local recogniser's words go in as text."""
+    t = await asyncio.wait_for(gemini([{"role": "user", "parts": [{"text": text}]}], brain_system(wake), as_json=True, fast=True), 30)
+    d = _parse_json(t)
+    if not d.get("heard"):
+        d["heard"] = text
+    return d
+
+
+async def _gemini_reply(payload, mime, wake, kind=None, text=None):
+    if not HAVE():
+        return {**_quiet(), "text": "I need an AI key first. Open Paru, Settings, AI key.", "mode": "offline", "kind": kind or "none"}
     try:
-        d = await brain_audio(payload, mime, wake)
+        if is_gemini():
+            d = await brain_audio(payload, mime, wake)
+        else:
+            if text is None:
+                return {**_quiet(), "text": "The on-device listener is still getting ready. Try again in a moment.", "mode": "offline", "kind": kind or "none"}
+            d = await brain_text(text, wake)
     except Exception as e:
         log("error", f"voice: {e}")
         return {**_quiet(), "text": friendly(e) if "busy" in friendly(e) else "I can't reach the internet right now.", "mode": "offline", "kind": kind or "none"}
@@ -1471,7 +1510,7 @@ async def voice_audio(request: Request, lang: str = "auto", wake: int = 0):
 
     if st == "ready":
         gem = None
-        if not idle and GEMINI_KEY and dur <= 20:                    # open conversation: ask Gemini at the same time as the local check
+        if not idle and HAVE() and is_gemini() and dur <= 20:                    # open conversation: ask Gemini at the same time as the local check
             gem = asyncio.create_task(brain_audio(wav, "audio/wav", False))
         try:
             text = await asyncio.to_thread(asr.transcribe, BASE, asr.pcm16_to_f32(raw))
@@ -1487,15 +1526,17 @@ async def voice_audio(request: Request, lang: str = "auto", wake: int = 0):
             return {**_quiet(text), "action": {"type": typ, "target": ""}, "kind": k}
         if idle:
             if k == "wake":
-                if r["rest"].strip() and GEMINI_KEY:                  # "hello Paru, what's the weather": answer in one go
-                    return await _gemini_reply(wav, "audio/wav", True, "wake")
+                if r["rest"].strip() and HAVE():                      # "hello Paru, what's the weather": answer in one go
+                    return await _gemini_reply(wav, "audio/wav", True, "wake", text=r["rest"])
                 return {**_quiet(text), "greeting": True, "kind": "wake"}
-            if k == "weak" and GEMINI_KEY and _budget(_VERIFY, 6):      # looks like a greeting but the name was unclear: one cheap cloud check
+            if k == "weak" and HAVE() and is_gemini() and _budget(_VERIFY, 6):      # looks like a greeting but the name was unclear: one cheap cloud check
                 out = await _gemini_reply(wav, "audio/wav", True)
                 out["verified"] = True
                 return out
             return _quiet(text, kind="none")
         # open conversation, not a local command
+        if gem is None and HAVE() and not is_gemini() and text.strip():
+            gem = asyncio.create_task(brain_text(text, False))
         if gem:
             try:
                 d = await gem
@@ -1507,7 +1548,7 @@ async def voice_audio(request: Request, lang: str = "auto", wake: int = 0):
             except Exception as e:
                 log("error", f"voice: {e}")
                 return {**_quiet(text), "text": friendly(e) if "busy" in friendly(e) else "I can't reach the internet right now.", "mode": "offline", "kind": "talk"}
-        return {**_quiet(text), "text": "I need a Gemini key to answer. Add it in Paru, Settings, Keys.", "kind": "talk"}
+        return {**_quiet(text), "text": "I need an AI key first. Open Paru, Settings, AI key." if not HAVE() else "I did not catch that.", "kind": "talk"}
 
     # local engine not ready (still downloading, or the download failed)
     if not idle:
@@ -1538,23 +1579,148 @@ async def voice_asr_retry(request: Request):
     return asr.STATUS
 
 
+PROFILE_PATH = os.path.join(BASE, "profile.json")
+
+
+def apply_profile(p):
+    """The person's chosen names and phrases (set in the app's setup)."""
+    global ASSISTANT_NAME, OWNER_NAME, WAKE_PHRASE
+    if p.get("assistant"):
+        ASSISTANT_NAME = str(p["assistant"])[:40]
+    if p.get("owner"):
+        OWNER_NAME = str(p["owner"])[:60]
+    WK.configure(p.get("wake"), p.get("off"))
+    WAKE_PHRASE = WK.wake_phrase
+
+
+def _load_profile():
+    try:
+        apply_profile(json.load(open(PROFILE_PATH, encoding="utf-8")))
+    except Exception:
+        pass
+
+
+_load_profile()
+
+
+def _profile():
+    return {"wake": WK.wake_phrase, "off": WK.off_phrase, "assistant": ASSISTANT_NAME, "owner": OWNER_NAME,
+            "heard_as": [" ".join(v) for v in WK.wake_variants[1:]], "off_heard_as": [" ".join(v) for v in WK.off_variants[1:]]}
+
+
+@app.get("/voice/config")
+async def voice_config_get(request: Request):
+    if not key_ok(request):
+        return JSONResponse({"error": "wrong key"}, status_code=401)
+    return _profile()
+
+
+@app.post("/voice/config")
+async def voice_config_set(request: Request):
+    if not key_ok(request):
+        return JSONResponse({"error": "wrong key"}, status_code=401)
+    d = await request.json()
+    apply_profile({k: d.get(k) for k in ("wake", "off", "assistant", "owner")})
+    try:
+        json.dump({k: d.get(k) for k in ("wake", "off", "assistant", "owner") if d.get(k)}, open(PROFILE_PATH, "w", encoding="utf-8"))
+    except Exception:
+        pass
+    return _profile()
+
+
+@app.get("/voice/providers")
+async def voice_providers(request: Request):
+    if not key_ok(request):
+        return JSONResponse({"error": "wrong key"}, status_code=401)
+    return {"providers": llm.catalog(), "active": {"id": PROV["id"] or ("gemini" if GEMINI_KEY else ""), "model": PROV["model"] or MODEL, "ready": HAVE()}}
+
+
+@app.post("/voice/provider/verify")
+async def voice_provider_verify(request: Request):
+    """Is this key real? Makes one free call (list models) to the chosen service."""
+    if not key_ok(request):
+        return JSONResponse({"error": "wrong key"}, status_code=401)
+    d = await request.json()
+    cfg = {"id": str(d.get("id", "")), "key": str(d.get("key", "")), "base": str(d.get("base", "")), "model": str(d.get("model", ""))}
+    out = await llm.verify(http, cfg)
+    out["guess"] = llm.detect(cfg["key"])
+    return out
+
+
+@app.post("/voice/provider")
+async def voice_provider_set(request: Request):
+    """The app hands over the key it keeps encrypted on this computer. It stays in memory here and is never written to disk by the agent."""
+    if not key_ok(request):
+        return JSONResponse({"error": "wrong key"}, status_code=401)
+    d = await request.json()
+    if d.get("id") not in llm.PROVIDERS:
+        return JSONResponse({"error": "unknown provider"}, status_code=400)
+    set_provider(d["id"], str(d.get("key", "")), str(d.get("base", "")), str(d.get("model", "")))
+    return {"ok": True, "ready": HAVE(), "provider": PROV["id"]}
+
+
+@app.post("/voice/transcribe")
+async def voice_transcribe(request: Request):
+    """Words only (no AI service): live captions during setup, and the wake-phrase test."""
+    if not key_ok(request):
+        return JSONResponse({"error": "wrong key"}, status_code=401)
+    raw = await request.body()
+    if asr.STATUS["state"] != "ready":
+        return {"text": "", "asr": dict(asr.STATUS), "wake": "none", "session": "none"}
+    text = await asyncio.to_thread(asr.transcribe, BASE, asr.pcm16_to_f32(raw))
+    return {"text": text, "wake": WK.classify(text)["kind"], "session": WK.classify(text, True)["kind"], "asr": dict(asr.STATUS)}
+
+
+_YES = re.compile(r"\b(yes|yeah|yep|yup|sure|ok|okay|allow|go ahead|do it|please do|fine|of course|alright|affirmative)\b", re.I)
+_NO = re.compile(r"\b(no|nope|nah|don'?t|do not|deny|cancel|stop|never|negative|not now)\b", re.I)
+_ALWAYS = re.compile(r"\b(always|every ?time|from now on|forever)\b", re.I)
+
+
+@app.post("/voice/yesno")
+async def voice_yesno(request: Request):
+    """The person answers a permission question out loud. Decided on this computer."""
+    if not key_ok(request):
+        return JSONResponse({"error": "wrong key"}, status_code=401)
+    raw = await request.body()
+    if asr.STATUS["state"] != "ready":
+        return {"answer": "none", "text": ""}
+    t = await asyncio.to_thread(asr.transcribe, BASE, asr.pcm16_to_f32(raw))
+    if _NO.search(t) and not re.search(r"\b(yes|yeah|sure|okay)\b", t, re.I):
+        a = "no"
+    elif _YES.search(t):
+        a = "always" if _ALWAYS.search(t) else "yes"
+    else:
+        a = "none"
+    return {"answer": a, "text": t}
+
+
 @app.post("/voice/wake/learn")
 async def voice_wake_learn(request: Request):
-    """The person says "hello Paru" a few times. We keep how the recognizer wrote the name for their voice."""
+    """The person says their wake (or off) phrase a few times. We keep how the recogniser wrote it for their voice."""
     if not key_ok(request):
         return JSONResponse({"error": "wrong key"}, status_code=401)
     if asr.STATUS["state"] != "ready":
         return {"error": "engine-not-ready", "asr": dict(asr.STATUS)}
     d = await request.json()
+    kind = "off" if d.get("kind") == "off" else "wake"
+    if d.get("phrase"):
+        WK.configure(wake=d["phrase"] if kind == "wake" else None, off=d["phrase"] if kind == "off" else None)
     texts = []
     for b in (d.get("samples") or [])[:8]:
         try:
             texts.append(await asyncio.to_thread(asr.transcribe, BASE, asr.pcm16_to_f32(base64.b64decode(b))))
         except Exception:
             pass
-    added = WK.learn(texts)
-    ok = [WK.classify(t)["kind"] in ("wake",) for t in texts]
-    return {"heard": texts, "added": added, "recognized": sum(ok), "total": len(texts)}
+    hit = lambda t: WK.classify(t)["kind"] == ("off" if kind == "off" else "wake")
+    before = sum(hit(t) for t in texts)
+    added = WK.learn_phrase(kind, texts)
+    after = sum(hit(t) for t in texts)
+    prof = {k: v for k, v in _profile().items() if v}
+    try:
+        json.dump(prof, open(PROFILE_PATH, "w", encoding="utf-8"))
+    except Exception:
+        pass
+    return {"kind": kind, "heard": texts, "recognized": before, "recognized_after": after, "total": len(texts), "added": added}
 
 
 @app.post("/voice/wake/forget")
@@ -1589,6 +1755,8 @@ async def voice_text(request: Request):
         return JSONResponse({"error": "wrong key"}, status_code=401)
     d = await request.json()
     q_ = str(d.get("text", ""))[:500]
+    if not HAVE():
+        return {"heard": q_, "text": "I need an AI key first. Open Paru, Settings, AI key.", "mode": "offline"}
     try:
         await calendar_text()
     except Exception:
@@ -1598,8 +1766,9 @@ async def voice_text(request: Request):
                                                         brain_system(False), as_json=True, fast=True), 30))
         if isinstance(out, dict):
             out["heard"] = q_
-    except Exception:
-        return {"heard": q_, "text": offline_answer(), "mode": "offline"}
+    except Exception as e:
+        fe = friendly(e)
+        return {"heard": q_, "text": fe if ("busy" in fe or "AI key" in fe) else offline_answer(), "mode": "offline"}
     return await finish_voice(out)
 
 

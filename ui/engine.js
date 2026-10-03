@@ -113,6 +113,8 @@
     }
     /* listen({wait, hang, max, startNow}) -> {pcm} | {timeout} | {tooShort} | {cancelled} */
     listen(o = {}) {
+      if (root.__PARU_FEEDER) { const f = root.__PARU_FEEDER(); if (f) return Promise.resolve({ pcm: Float32Array.from(f) }); }                    // tests feed recorded phrases here (inert otherwise)
+      if (root.__PARU_FEED && root.__PARU_FEED.length) return Promise.resolve({ pcm: Float32Array.from(root.__PARU_FEED.shift()) });
       return new Promise(res => {
         if (this.collector) this.finish(this.collector, 'cancel');
         const c = this.collector = { res, wait: o.wait || 0, hang: o.hang || 600, max: o.max || 8000, startNow: !!o.startNow, started: false, elapsed: 0, frames: [], voiced: 0, quiet: 0 };
@@ -143,9 +145,9 @@
       try {
         while (true) {
           const C = this.C;
-          if (!C.key) { this.status.agent = 'nokey'; this.pub(); break; }
+          if (!C.key || !C.onboarded) { this.status.agent = C.key ? 'setup' : 'nokey'; this.pub(); break; }
           if (!C.wake && !this.active) { this.releaseMic(); break; }                       // listening is off and no conversation is open
-          if (!C.perms.mic) { this.status.mic = false; this.status.micError = 'permission'; this.pub(); if (this.active) { this.ui.show(); this.ui.say('', 'Turn on the microphone: Paru → Settings → Permissions.'); await sleep(5000); this.endSession(); } break; }
+          if (C.perms.mic !== 'allow') { this.status.mic = false; this.status.micError = 'permission'; this.pub(); if (this.active) { this.ui.show(); this.ui.say('', 'Turn on the microphone: Paru → Settings → Permissions.'); await sleep(5000); this.endSession(); } break; }
           if (!await this.mic()) { if (this.active) { this.ui.show(); this.ui.say('', 'The microphone is blocked. Allow it in your system privacy settings.'); await sleep(5000); this.endSession(); } else await sleep(4000); if (!this.active && !this.C.wake) break; continue; }
           const idle = !this.active;
           let seg;
@@ -230,7 +232,7 @@
     async talkNow() {                                                    // hotkey / Talk button
       if (this.enrolling) return;
       if (this.active && this.ui.visible && this.ui.visible()) return this.endSession();
-      if (!this.C.perms.mic) { this.ui.show(); this.ui.say('', 'Turn on the microphone: Paru → Settings → Permissions.'); await sleep(5000); if (!this.active) this.ui.hide(); return; }
+      if (this.C.perms.mic !== 'allow') { this.ui.show(); this.ui.say('', 'Turn on the microphone: Paru → Settings → Permissions.'); await sleep(5000); if (!this.active) this.ui.hide(); return; }
       this.stopSpeech(); this.active = true; this.lastAct = Date.now(); this.ui.show(); this.ui.say('', 'Listening…'); this.ui.state('listening'); this.chime('wake');
       this.running = true; if (this.cancelListen) this.cancelListen(); this.loop();
     }
@@ -270,7 +272,7 @@
       const jobs = parts.map(p => this.getTts(p, lang));
       // barge-in: speaking over Paru stops it and starts recording what you say (threshold adapts to the speaker's own bleed)
       let watch = null;
-      if (this.C.interrupt && this.C.perms.mic && this.stream && this.stream.active && this.active) {
+      if (this.C.interrupt && this.C.perms.mic === 'allow' && this.stream && this.stream.active && this.active) {
         let base = 0, hot = 0; const t0 = Date.now();
         watch = setInterval(() => {
           const l = this.lv; if (Date.now() - t0 < 600) { base = Math.max(base, l); return; }
@@ -282,11 +284,21 @@
       for (let i = 0; i < parts.length && my === this.epoch; i++) {
         shown += (i ? ' ' : '') + parts[i]; upd(shown);
         const url = await jobs[i]; if (my !== this.epoch) break;
-        if (url) await new Promise(res => { this.playRes = res; const a = this.audio = new Audio(url); a.onended = a.onerror = () => { this.playRes = null; URL.revokeObjectURL(url); res(); }; a.play().catch(() => { this.playRes = null; res(); }); });
+        if (url) await new Promise(res => { this.playRes = res; const a = this.audio = new Audio(url); const stopMeter = this.meter(a); a.onended = a.onerror = () => { stopMeter(); this.playRes = null; URL.revokeObjectURL(url); res(); }; a.play().catch(() => { stopMeter(); this.playRes = null; res(); }); });
         else await new Promise(res => { try { const u = new SpeechSynthesisUtterance(parts[i]); u.lang = lang || 'en'; const vv = speechSynthesis.getVoices().find(x => x.lang.toLowerCase().startsWith((lang || 'en').slice(0, 2))); if (vv) u.voice = vv; u.onend = u.onerror = res; speechSynthesis.speak(u); } catch { res(); } setTimeout(res, 2500 + parts[i].length * 110); });
       }
       if (watch) clearInterval(watch); this.bargeStop = null;
       if (my === this.epoch) { upd(t); this.speaking = false; this.audio = null; }
+    }
+    /* The orb should move with Paru's own voice: measure the audio that is playing. */
+    meter(audio) {
+      try {
+        this.out = this.out || new AudioContext(); const a = this.out; if (a.state === 'suspended') a.resume();
+        const src = a.createMediaElementSource(audio), an = a.createAnalyser(); an.fftSize = 512; src.connect(an); an.connect(a.destination);
+        const buf = new Uint8Array(an.fftSize); let on = true;
+        (function tick(self) { if (!on) return; an.getByteTimeDomainData(buf); let e = 0; for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; e += v * v; } self.ui.level && self.ui.level(Math.sqrt(e / buf.length)); requestAnimationFrame(() => tick(self)); })(this);
+        return () => { on = false; try { src.disconnect(); an.disconnect(); } catch { } };
+      } catch { return () => { }; }
     }
     barge() {                                                            // the person started talking over Paru
       const my = this.epoch; this.stopSpeech(); this.speaking = false;
@@ -294,12 +306,28 @@
       this.listen({ startNow: true, hang: 850, max: 25000 }).then(s => { if (s.pcm) this.pendingSeg = { pcm: s.pcm }; if (!this.busy) this.loop(); });
     }
 
+    /* ======================= asking permission the first time a kind of task is used ======================= */
+    async askPerm(q) {
+      const my = this.epoch; this.stopSpeech(); if (this.cancelListen) this.cancelListen();
+      let done = false; const finish = choice => { if (done) return; done = true; this.ui.askDone && this.ui.askDone(); this.P.permReply(q.id, choice); if (this.active) this.ui.state('listening'); else setTimeout(() => this.ui.hide(), 400); };
+      this.ui.show(); this.ui.state('speaking'); this.ui.ask && this.ui.ask(q, finish); this.chime('wake');
+      await this.speak('May I ' + q.what + '? Say yes, always, or no.', () => { }, 'en');
+      for (let tries = 0; tries < 2 && !done; tries++) {
+        this.ui.state('listening'); const seg = await this.listen({ wait: 9000, hang: 700, max: 6000 });
+        if (done) return; if (!seg.pcm) continue;
+        const r = await this.P.api('/voice/yesno', 'POST', toPcm16(seg.pcm), 'audio/L16');
+        if (r && r.answer === 'yes') return finish('once'); if (r && r.answer === 'always') return finish('always'); if (r && r.answer === 'no') return finish('no');
+        if (!done) { this.ui.say('', 'Please say yes, always, or no.'); }
+      }
+      if (!done) finish('no');
+    }
+
     /* ======================= teach Paru my voice ======================= */
     async enroll() {
       if (this.enrolling) return; this.enrolling = true; this.stopSpeech(); if (this.cancelListen) this.cancelListen();
       const P = this.P; const done = m => { this.enrolling = false; P.enrollDone(m); this.endSession(); this.poke(); };
       try {
-        if (!this.C.perms.mic || !await this.mic()) return done({ ok: false, msg: 'Allow the microphone first (Settings → Permissions).' });
+        if (this.C.perms.mic !== 'allow' || !await this.mic()) return done({ ok: false, msg: 'Allow the microphone first (Settings → Permissions).' });
         this.active = true; this.ui.show(); const vs = [], samples = [];
         const lines = ['Hello Paru', 'Hey Paru', 'Hello Paru, how are you?', 'Okay Paru'];
         for (let i = 0; i < lines.length; i++) {
@@ -317,5 +345,6 @@
       } catch (e) { done({ ok: false, msg: 'Training failed: ' + e.message }); }
     }
   }
+  ParuEngine.voiceVec = voiceVec; ParuEngine.cosv = cosv; ParuEngine.unit = unit; ParuEngine.toPcm16 = toPcm16; ParuEngine.b64 = b64;
   root.ParuEngine = ParuEngine;
 })(typeof window !== 'undefined' ? window : globalThis);

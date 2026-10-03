@@ -1,4 +1,4 @@
-<!doctype html><html data-theme="dark"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: data:; connect-src *; worker-src 'self' blob:; object-src 'none'; base-uri 'none'"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Paru</title><script src="bridge.js"></script><link rel="stylesheet" href="orb.css"><style>
+<!doctype html><html data-theme="dark"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: data:; connect-src *; worker-src 'self' blob:; object-src 'none'; base-uri 'none'"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Paru</title><script src="supabase-config.js"></script><script src="auth-core.js"></script><script src="bridge.js"></script><link rel="stylesheet" href="orb.css"><style>
 :root{--bg:#0a0912;--side:#0e0c19;--card:#15122a;--card2:#1e1a38;--line:#ffffff1a;--tx:#f4f2ff;--mut:#f4f2ff99;--acc:#8a6bff;--ok:#36d399;--bad:#ff6b7a;--hov:#ffffff10;--bar:#0a0912;--user:color-mix(in srgb,var(--acc) 24%,#15122a);--fs:14px;--r:14px}
 [data-theme=light]{--bg:#f7f5fd;--side:#efeafa;--card:#fff;--card2:#ece7fa;--line:#1b153522;--tx:#1b1535;--mut:#1b153599;--ok:#10a36f;--bad:#d6334a;--hov:#1b15350d;--bar:#f7f5fd;--user:color-mix(in srgb,var(--acc) 16%,#fff)}
 *{box-sizing:border-box}html,body{margin:0;height:100%}
@@ -106,6 +106,11 @@ body.phone #rowAuto,body.phone #rowLan{display:none}body.phone .desk{display:non
  <div class="pg" id="settings"><div id="tabs"></div><div id="sbody">
 
  <div class="tab" id="t-general"><h2>General</h2><p class="sub">Everything saves as soon as you change it. You can also say these out loud, for example “switch to light mode” or “speak faster”.</p>
+<div class="card" id="acct"><div class="set"><div><b id="acN">Signed in</b><small id="acE"></small></div><button class="btn g" id="acOut">Sign out</button></div>
+<div class="set"><div>AI service &amp; key<small id="acP"></small></div><button class="btn g" data-setup="key">Change</button></div>
+<div class="set"><div>Wake &amp; off words<small id="acW"></small></div><button class="btn g" data-setup="words">Change</button></div>
+<div class="set"><div>Voice recognition<small>Teach Paru your voice again</small></div><button class="btn g" data-setup="voice">Retrain</button></div>
+<div class="set"><div>Permissions<small>What Paru may do, task by task</small></div><button class="btn g" data-setup="perms">Review</button></div></div>
   <div class="card">
    <div class="set"><div>VOICE_KEY (your secret word)<small>Must match VOICE_KEY in the agent's keys</small></div><input type="password" id="sk"></div>
    <div class="set"><div>Agent address<small>Where the agent runs</small></div><input type="text" id="sv"></div>
@@ -152,7 +157,7 @@ body.phone #rowAuto,body.phone #rowLan{display:none}body.phone .desk{display:non
  <p class="note">After this, Paru will ask you to say four short phrases so it can learn your voice.</p></div>
 <script src="voices.js"></script><script src="orb.js"></script><script src="engine.js"></script>
 <script>
-const $=id=>document.getElementById(id),$$=s=>document.querySelectorAll(s);let C={perms:{}};
+const $=id=>document.getElementById(id),$$=s=>document.querySelectorAll(s);let C={perms:{}};const WW=()=>C.wakeWord||"Hey Paru",OW=()=>C.offWord||"Turn off Paru";
 const ICON={sun:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/></svg>',moon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 13A9 9 0 1111 3a7 7 0 0010 10z"/></svg>'};
 const sav=async c=>{C=await P.setCfg(c);apply();return C};
 /* ===== look ===== */
@@ -189,7 +194,7 @@ async function loadHist(){const [h,t]=await Promise.all([P.api("/voice/history")
   if(cur&&SESS.length&&cur===SESS[SESS.length-1].start)showSession(true)}
  if(!t.error)TASKS=t.items;drawList()}
 function bub(who,text,ts){const r=document.createElement("div");r.className="row"+(who==="You"?" me":"");const b=document.createElement("div");b.className="bub";b.textContent=text;if(ts){const s=document.createElement("small");s.textContent=ts.slice(11);b.append(s)}r.append(b);return r}
-function hero(){const h=document.createElement("div");h.id="hero";h.innerHTML='<div class="o paru-orb"></div><h1></h1><p>Ask in any language, or say “hello Paru”. Say “shut up” and I will go quiet.</p><div class="chips"></div>';
+function hero(){const h=document.createElement("div");h.id="hero";h.innerHTML='<div class="o paru-orb"></div><h1></h1><p class="hp"></p><div class="chips"></div>';h.querySelector('.hp').textContent='Ask in any language, or say “'+WW()+'”. Say “shut up” and I will go quiet.';
  {const bo=ParuOrb.mount(h.querySelector(".o"),document.createElement("div"));bo.applyCfg(C);bo.state("listening")}const hr=new Date().getHours();h.querySelector("h1").textContent=(hr<12?"Good morning":hr<17?"Good afternoon":"Good evening")+(C.owner?", "+C.owner:"");
  [["Check my mail","Check my mail"],["My calendar","What is on my calendar today?"],["My tasks","What are my tasks?"],["Daily report","Send me today's daily report"],["Waiting clients","Which client messages are waiting for my reply?"]].forEach(([a,q])=>{const b=document.createElement("button");b.textContent=a;b.onclick=()=>ask(q);h.querySelector(".chips").append(b)});return h}
 function showSession(keep){const M=$("msgs");const s=SESS.find(x=>x.start===cur);const stick=M.scrollTop+M.clientHeight>=M.scrollHeight-40;
@@ -212,14 +217,16 @@ async function ask(q,quiet){view("chat");const M=$("msgs");const h=$("hero");if(
  bx.textContent=out||"Done.";M.scrollTop=1e9;setTimeout(loadHist,800)}
 $("cs").onclick=()=>{const v=$("ci").value.trim();if(v){$("ci").value="";ask(v)}};$("ci").onkeydown=e=>{if(e.key==="Enter")$("cs").click()};
 /* ===== permissions ===== */
-const GROUPS=[["On this computer",[["mic","Microphone","Hear you say “hello Paru”"],["contacts","Contacts","Look up people when you ask"],["photos","Photos & videos","Open your Pictures and Videos folders"],["calls","Calls","Make calls through your connected phone account"],["apps","Apps","Open and close programs on this PC"],["files","Files & folders","Open Documents, Downloads and Desktop"]]],
-["Online",[["search","Research & search","Search the web for you"],["browser","Browser","Open websites in your browser"],["download","Download","Save files to your Downloads folder"],["upload","Upload","Send files to Drive and other services"],["reply","Replies","Draft replies to clients (you confirm each one)"],["update","Updates","Check for and install Paru updates"],["onlineCalls","Online apps","Reply in WhatsApp, Instagram, Facebook, email"]]]];
-function permRows(el){el.innerHTML="";for(const[g,items]of GROUPS){const c=document.createElement("div");c.className="card";const h=document.createElement("div");h.className="set";h.innerHTML="<b>"+g+"</b>";c.append(h);
- for(const[k,n,d]of items){const r=document.createElement("div");r.className="set";r.innerHTML="<div>"+n+"<small>"+d+"</small></div>";const i=document.createElement("input");i.type="checkbox";i.className="sw";i.dataset.k=k;i.checked=!!C.perms[k];r.append(i);c.append(r)}el.append(c)}}
-const readPerms=el=>{const p={};el.querySelectorAll(".sw").forEach(i=>p[i.dataset.k]=i.checked);return p};
-async function applyPerms(p,first){if(p.mic){try{(await navigator.mediaDevices.getUserMedia({audio:true})).getTracks().forEach(t=>t.stop())}catch{p.mic=false;alert("Windows blocked the microphone. Turn it on in Windows Settings → Privacy & security → Microphone.")}}
- await sav({perms:p,onboarded:true});if(first&&p.mic&&!C.voiceprint)setTimeout(()=>P.enroll(),600)}
-$("pl").addEventListener("change",e=>{if(e.target.classList.contains("sw"))applyPerms(readPerms($("pl")))});
+const GROUPS=[["On this computer",[["mic","Microphone","Hear you say your wake word"],["apps","Apps","Open and close programs"],["files","Files, folders & notes","Open Documents, Downloads, Desktop and save notes"],["photos","Photos & videos","Open your Pictures and Videos folders"],["screenshot","Screenshots","Take a picture of your screen"],["system","Lock screen","Lock this computer"],["contacts","Contacts","Look up people when you ask"],["calls","Calls","Make calls through your connected phone account"]]],
+["Online",[["browser","Browser","Open websites"],["search","Search","Search the web for you"],["download","Downloads","Save files to your Downloads folder"],["upload","Upload","Send files to Drive and other services"],["reply","Replies","Draft replies to clients (you confirm each one)"],["update","Updates","Check for and install Paru updates"],["onlineCalls","Online apps","Reply in WhatsApp, Instagram, Facebook, email"]]]];
+const PV=[["ask","Ask me first"],["allow","Always allow"],["deny","Never"]];
+function permRows(el){el.innerHTML="";const hint=document.createElement("p");hint.className="sub";hint.textContent="The first time Paru is asked to do something new, it asks you, out loud and on screen. Choose Always allow to stop being asked for that kind of task.";el.append(hint);
+ for(const[g,items]of GROUPS){if(!P.isElectron&&g==="On this computer")continue;const c=document.createElement("div");c.className="card";const h=document.createElement("div");h.className="set";h.innerHTML="<b>"+g+"</b>";c.append(h);
+  for(const[k,n,d]of items){if(!P.isElectron&&k!=="mic")continue;const r=document.createElement("div");r.className="set";r.innerHTML="<div>"+n+"<small>"+d+"</small></div>";const sel=document.createElement("select");sel.className="pv";sel.dataset.k=k;PV.forEach(([v,l])=>sel.add(new Option(l,v)));sel.value=C.perms[k]||"ask";r.append(sel);c.append(r)}el.append(c)}}
+const readPerms=el=>{const p={};el.querySelectorAll("select.pv").forEach(i=>p[i.dataset.k]=i.value);return p};
+async function applyPerms(p){if(p.mic==="allow"){try{(await navigator.mediaDevices.getUserMedia({audio:true})).getTracks().forEach(t=>t.stop())}catch{p.mic="ask";alert("The system blocked the microphone. Turn it on in your system's privacy settings.")}}
+ await sav({perms:p})}
+$("pl").addEventListener("change",async e=>{if(e.target.classList.contains("pv")){await applyPerms(readPerms($("pl")));permRows($("pl"))}});
 function onboard(){permRows($("ol"));$("ob").classList.add("on")}
 $("oa").onclick=async()=>{$("ob").classList.remove("on");await applyPerms(readPerms($("ol")),true)};
 $("oall").onclick=async()=>{$$("#ol .sw").forEach(i=>i.checked=true);$("ob").classList.remove("on");await applyPerms(readPerms($("ol")),true)};
@@ -228,7 +235,7 @@ $("on").onclick=async()=>{$("ob").classList.remove("on");await sav({onboarded:tr
 Object.entries(PARU_VOICES.langs).forEach(([k,v])=>{const o=document.createElement("option");o.value=k;o.textContent=v[0];$("sl").append(o)});
 const bind=(id,key,conv)=>{const e=$(id);const ev=e.type==="checkbox"||e.tagName==="SELECT"?"change":"change";e.addEventListener(ev,()=>sav({[key]:conv?conv(e):(e.type==="checkbox"?e.checked:e.value.trim())}))};
 bind("sk","key");bind("sv","server");bind("sau","autostart");bind("slan","lan");bind("sl","lang");bind("sw","wake");bind("sr","rate",e=>+e.value);bind("sh","autoHide",e=>+e.value);bind("si","interrupt");bind("sa","askEach");bind("sc","closeQuits",e=>e.value==="1");
-function fill(){$("sk").value=C.key||"";$("sv").value=C.server;$("sau").checked=C.autostart!==false;$("slan").checked=!!C.lan;if(P.lanInfo)P.lanInfo().then(i=>{$("lanS").innerHTML=C.lan&&i.ip?"On your phone enter: <span class=\"addr\">http://"+i.ip+":"+i.port+"</span> and the same VOICE_KEY":"Opens the agent to your home network. Your VOICE_KEY still protects it"});$("sl").value=C.lang;$("sw").checked=!!C.wake;$("sr").value=String(C.rate||0);$("sh").value=String(C.autoHide||0);$("si").checked=!!C.interrupt;$("sa").checked=!!C.askEach;$("sc").value=C.closeQuits?"1":"0";
+function fill(){$("sk").value=C.key||"";$("sv").value=C.server;$("sau").checked=C.autostart!==false;$("slan").checked=!!C.lan;if(P.lanInfo)P.lanInfo().then(i=>{$("lanS").innerHTML=C.lan&&i.ip?"On your phone enter: <span class=\"addr\">http://"+i.ip+":"+i.port+"</span> \u00b7 key <span class=\"addr\">"+C.key+"</span>":"Opens the agent to your home network. Your VOICE_KEY still protects it"});$("sl").value=C.lang;$("sw").checked=!!C.wake;$("sr").value=String(C.rate||0);$("sh").value=String(C.autoHide||0);$("si").checked=!!C.interrupt;$("sa").checked=!!C.askEach;$("sc").value=C.closeQuits?"1":"0";
  $$(".seg").forEach(s=>{const k={cth:"theme",cor:"orbSize",cfs:"fontSize"}[s.id];s.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.v===C[k]))});
  $$("#cac i").forEach(i=>i.classList.toggle("on",i.dataset.c===C.accent));$("vk").checked=!!C.voiceLock;$("vt").value=Math.round((C.voiceThr||.9)*100);recogUi()}
 /* ===== voices ===== */
@@ -246,7 +253,7 @@ function recogUi(){$("vs").textContent=C.voiceprint&&C.vpVer===2?"Your voice is 
   $("eng").textContent="Wake-word engine: "+({ready:"ready (offline)",downloading:"downloading "+r.pct+"%",loading:"loading…",error:"not available — "+(r.error||""),idle:"waiting"}[r.state]||r.state)+". Tip: say “hello Paru” clearly, then pause a moment."})}
 $("vk").onchange=()=>{if($("vk").checked&&!C.voiceprint){$("vk").checked=false;alert("Teach Paru your voice first.");return}sav({voiceLock:$("vk").checked})};
 $("vt").onchange=()=>sav({voiceThr:+$("vt").value/100});
-$("vtr").onclick=()=>{$("vs").textContent="Follow the steps on the Paru orb at the top right…";P.enroll()};
+$("vtr").onclick=()=>P.openSetup("voice");
 $("vcl").onclick=async()=>{await sav({voiceprint:null,voiceLock:false,vpVer:0});await P.api("/voice/wake/forget","POST","{}");fill()};
 P.onEnrollDone(async r=>{C=await P.cfg();fill();$("vs").textContent=r.msg})
 /* ===== env (assistant + keys) ===== */
@@ -294,18 +301,21 @@ function strip(){const S=$("strip"),pt=$("pt"),ps=$("ps"),bar=$("bar");let cls="
  else if(!AGOK){cls="bad";t="The agent is offline";s2=P.isElectron?"Paru is trying to start it. Open the tray menu → Restart agent":"Check the address in Settings → General and that the agent is running on your computer"}
  else if(KEYBAD){cls="bad";t="Wrong VOICE_KEY";s2="Settings → General"}
  else if(!C.wake){cls="";t="Paru is off";s2="Not listening. Turn the switch on, or press Ctrl+Shift+Space to talk once"}
- else if(!C.perms.mic){cls="bad";t="Microphone is off";s2="Settings → Permissions → Microphone"}
+ else if(C.perms.mic!=="allow"){cls="bad";t="Microphone is off";s2="Settings → Permissions → Microphone"}
  else if(EN.mic===false&&EN.micError&&EN.micError!=="permission"){cls="bad";t="The microphone is blocked";s2="Allow it in your system privacy settings"}
  else if(down){cls="wait";t="Getting the offline wake-word engine ready…";s2="One-time download (about 100 MB). Hello Paru starts working when it finishes";bar.style.display="block";bar.firstChild.style.width=(ASR.pct||5)+"%"}
  else if(ASR&&ASR.state==="error"){cls="wait";t="Listening (cloud mode)";s2="The offline wake-word engine could not download, so Paru uses Gemini to hear “hello Paru”. "+(ASR.error||"")}
- else{t="Listening for “Hello Paru”";s2="Say “shut up” to dismiss me · “Turn off Paru” to stop listening"}
+ else{t="Listening for “"+WW()+"”";s2="Say “shut up” to dismiss me · “"+OW()+"” to stop listening"}
  S.className=cls;pt.textContent=t;ps.textContent=s2;$("pwsw").checked=!!C.wake;$("pwl").textContent=C.wake?"On":"Off"}
 $("pwsw").onchange=()=>sav({wake:$("pwsw").checked});
 P.onEngineStatus&&P.onEngineStatus(x=>{EN=x;strip()});P.onAgentStatus&&P.onAgentStatus(x=>{AG=x;strip();if(x.state==="online")setTimeout(ping,500)});
 P.agentStatus&&P.agentStatus().then(x=>{AG=x;strip()});
 setInterval(()=>{if(ASR&&ASR.state!=="ready"&&AGOK)ping()},3000);
-async function load(){C=await P.cfg();if(!P.isElectron)bootPhone();apply();fill();$("hs").style.display=$("hl").style.display="none";$("msgs").append(hero());await ping();loadHist();if(!C.onboarded)onboard()}
-P.onCfg(c=>{C=c;apply();fill();strip()});P.onFs(f=>$("wf").title=f?"Exit full screen":"Full screen");
+async function acct(){const a=await P.authState();$("acN").textContent=a.user?(a.user.name||a.user.email):"Not signed in";$("acE").textContent=a.user?a.user.email:"";const p=await P.providerStatus();
+ $("acP").textContent=p.id?(p.id+(p.model?" \u00b7 "+p.model:"")+(p.hasKey?" \u00b7 key saved "+(p.secure?"(encrypted by your system)":"(protected local file)"):"")):"Not set";$("acW").textContent=WW()+"  /  "+OW()}
+$$("[data-setup]").forEach(b=>b.onclick=()=>P.openSetup(b.dataset.setup));$("acOut").onclick=async()=>{if(confirm("Sign out of Paru? Your chats and settings stay on this device."))await P.authSignOut()};
+async function load(){C=await P.cfg();if(!P.isElectron){const a=await P.authState();if(!a.signedIn||!C.onboarded){location.replace("setup.html");return}bootPhone()}apply();fill();acct();$("hs").style.display=$("hl").style.display="none";$("msgs").append(hero());await ping();loadHist();if(!C.onboarded)onboard()}
+P.onCfg(c=>{C=c;apply();fill();strip();acct()});P.onFs(f=>$("wf").title=f?"Exit full screen":"Full screen");
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change",apply);
 setInterval(ping,15000);setInterval(()=>{if($("chat").classList.contains("on"))loadHist()},4000);load();
 </script></body></html>
