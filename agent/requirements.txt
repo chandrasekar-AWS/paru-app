@@ -1,8 +1,0 @@
-fastapi
-uvicorn
-httpx
-tzdata
-google-auth-oauthlib
-edge-tts
-numpy
-sherpa-onnx
