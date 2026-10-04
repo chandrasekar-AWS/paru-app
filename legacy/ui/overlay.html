@@ -1,0 +1,20 @@
+<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: data:; connect-src *; worker-src 'self' blob:; object-src 'none'; base-uri 'none'"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="orb.css">
+<style>html,body{margin:0;height:100%;background:transparent;overflow:hidden}
+#w{position:absolute;inset:0;display:flex;flex-direction:column;align-items:flex-end;padding:6px 8px}</style></head>
+<body class="idle"><div id="w"><div class="paru-orb" id="orb" title="Click: stop talking / dismiss"></div><div class="paru-bubble hide" id="bubble"></div></div>
+<script src="voices.js"></script><script src="orb.js"></script><script src="engine.js"></script>
+<script>
+const orb = ParuOrb.mount(document.getElementById('orb'), document.getElementById('bubble'));
+let shown = false;
+const ui = {
+  show() { if (!shown) { shown = true; orb.run(true); P.ov(true); } }, hide() { shown = false; orb.hideBubble(); orb.run(false); P.ov(false); }, visible: () => shown,
+  state: s => orb.state(s), say: (me, t) => orb.say(me, t), level: v => orb.level(v), applyCfg: c => orb.applyCfg(c), ask: (q, cb) => orb.ask(q, cb), askDone: () => orb.hideBubble()
+};
+const E = new ParuEngine(P, ui);
+document.getElementById('orb').onclick = () => E.orbClick();
+P.onCfg(c => { E.setCfg(c); orb.applyCfg(c); E.poke(); });
+P.onTalk(() => E.talkNow()); P.onAskPerm(q => E.askPerm(q)); P.onEnroll(() => E.enroll());
+orb.run(false); (async () => { const c = await P.cfg(); E.setCfg(c); orb.applyCfg(c); E.start(); })();
+window.__E = E;   // for the automated tests
+</script></body></html>

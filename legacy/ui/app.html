@@ -1,0 +1,321 @@
+<!doctype html><html data-theme="dark"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: data:; connect-src *; worker-src 'self' blob:; object-src 'none'; base-uri 'none'"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Paru</title><script src="supabase-config.js"></script><script src="auth-core.js"></script><script src="bridge.js"></script><link rel="stylesheet" href="orb.css"><style>
+:root{--bg:#0a0912;--side:#0e0c19;--card:#15122a;--card2:#1e1a38;--line:#ffffff1a;--tx:#f4f2ff;--mut:#f4f2ff99;--acc:#8a6bff;--ok:#36d399;--bad:#ff6b7a;--hov:#ffffff10;--bar:#0a0912;--user:color-mix(in srgb,var(--acc) 24%,#15122a);--fs:14px;--r:14px}
+[data-theme=light]{--bg:#f7f5fd;--side:#efeafa;--card:#fff;--card2:#ece7fa;--line:#1b153522;--tx:#1b1535;--mut:#1b153599;--ok:#10a36f;--bad:#d6334a;--hov:#1b15350d;--bar:#f7f5fd;--user:color-mix(in srgb,var(--acc) 16%,#fff)}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{display:flex;flex-direction:column;background:var(--bg);color:var(--tx);font:var(--fs) "Segoe UI Variable Text","Segoe UI","Nirmala UI",system-ui,"Noto Sans","Noto Sans Tamil","Noto Sans Devanagari",sans-serif;overflow:hidden}
+button{font:inherit;color:inherit}
+/* ---- title bar ---- */
+#tb{height:44px;flex:none;display:flex;align-items:center;gap:14px;padding:0 14px;background:var(--bar);-webkit-app-region:drag;border-bottom:1px solid var(--line)}
+#lights{display:flex;gap:8px;-webkit-app-region:no-drag}
+.l{width:14px;height:14px;border-radius:50%;border:0;padding:0;cursor:pointer;display:grid;place-items:center;font:700 10px/1 system-ui;color:transparent;outline:none;box-shadow:inset 0 0 0 1px #00000030;transition:filter .12s}
+.l.r{background:#ff5f57}.l.y{background:#febc2e}.l.g{background:#28c840}#lights:hover .l{color:#000b}.l:hover{filter:brightness(1.08)}.l:active{filter:brightness(.85)}
+.ib{-webkit-app-region:no-drag;width:32px;height:30px;border:0;border-radius:8px;background:none;cursor:pointer;display:grid;place-items:center;color:var(--mut)}
+.ib:hover{background:var(--hov);color:var(--tx)}.ib svg{width:18px;height:18px}
+#ttl{flex:1;text-align:center;font-size:12px;color:var(--mut)}
+/* ---- layout ---- */
+#wrap{flex:1;display:flex;min-height:0}
+#side{width:272px;flex:none;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:12px 10px;gap:2px;overflow:hidden;transition:width .22s,padding .22s,opacity .18s}
+body.sb-off #side{width:0;padding-left:0;padding-right:0;opacity:0;border-right:0}
+.nav{display:flex;gap:12px;align-items:center;width:100%;background:none;border:0;text-align:left;padding:10px 12px;border-radius:10px;cursor:pointer;white-space:nowrap}
+.nav svg{width:18px;height:18px;flex:none;opacity:.85}.nav:hover{background:var(--hov)}.nav.on{background:var(--card2);font-weight:600}
+#hs{display:flex;align-items:center;justify-content:space-between;margin:14px 12px 4px;font-size:12px;color:var(--mut);white-space:nowrap}
+#hs div{display:flex;gap:2px}
+#hl{flex:1;overflow:auto;min-height:0;margin-top:2px}
+.it{display:flex;gap:10px;align-items:center;padding:8px 12px;border-radius:9px;cursor:pointer;white-space:nowrap;overflow:hidden}
+.it:hover{background:var(--hov)}.it.on{background:var(--card2)}.it i{width:12px;height:12px;border:1.5px solid var(--mut);border-radius:50%;flex:none}
+.it.done i{background:var(--ok);border-color:var(--ok)}.it.t i{border-radius:3px}.it span{overflow:hidden;text-overflow:ellipsis;flex:1}.it small{color:var(--mut);font-size:11px}
+.empty{padding:10px 12px;color:var(--mut);font-size:13px;white-space:normal}
+#foot{border-top:1px solid var(--line);padding-top:10px;margin-top:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;white-space:nowrap}
+#st{font-size:12px;color:var(--mut);padding-left:6px}#st.on{color:var(--ok)}
+#talk{border:0;border-radius:999px;padding:9px 18px;cursor:pointer;color:#fff;font-weight:600;background:linear-gradient(135deg,var(--acc),color-mix(in srgb,var(--acc) 55%,#ff4fd8))}
+#main{flex:1;min-width:0;display:flex;flex-direction:column}
+.pg{display:none;flex:1;min-height:0}.pg.on{display:flex;flex-direction:column}
+/* ---- chat ---- */
+#msgs{flex:1;overflow:auto;padding:26px 8% 10px}
+.row{display:flex;margin:0 0 12px}.row.me{justify-content:flex-end}
+.bub{max-width:min(720px,82%);padding:11px 15px;border-radius:18px;line-height:1.45;white-space:pre-wrap;word-break:break-word;background:var(--card2)}
+.row.me .bub{background:var(--user)}.bub small{display:block;color:var(--mut);font-size:11px;margin-top:4px}
+#hero{margin:auto;text-align:center;max-width:560px;padding:20px}
+#hero .o{--osz:104px;margin:0 auto 20px}
+#hero h1{font-size:30px;letter-spacing:-.01em;margin:0 0 6px}#hero p{color:var(--mut);margin:0 0 18px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}.chips button{padding:9px 15px;border-radius:999px;border:1px solid var(--line);background:var(--card);cursor:pointer}.chips button:hover{border-color:var(--acc)}
+#cf{display:flex;gap:8px;align-items:center;margin:8px 8% 22px;padding:8px 8px 8px 16px;border:1px solid var(--line);border-radius:999px;background:var(--card)}
+#cf:focus-within{border-color:var(--acc)}#ci{flex:1;border:0;outline:0;background:none;color:var(--tx);font:inherit;padding:6px 0}
+.rb{width:38px;height:38px;border-radius:50%;border:0;cursor:pointer;display:grid;place-items:center;background:var(--card2)}.rb.pri{background:var(--acc);color:#fff}.rb svg{width:18px;height:18px}
+/* ---- settings ---- */
+#tabs{display:flex;gap:4px;padding:14px 28px 0;border-bottom:1px solid var(--line);overflow:auto;flex:none}
+#tabs button{border:0;background:none;padding:10px 14px;cursor:pointer;color:var(--mut);border-bottom:2px solid transparent;white-space:nowrap}
+#tabs button.on{color:var(--tx);border-color:var(--acc);font-weight:600}
+#sbody{flex:1;overflow:auto;padding:22px 28px}.tab{display:none;max-width:800px}.tab.on{display:block}
+h2{margin:0 0 4px;font-size:22px}.sub{color:var(--mut);margin:0 0 16px;max-width:640px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:6px 18px;margin-bottom:14px}
+.set{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:13px 0;border-top:1px solid var(--line)}.set:first-child{border-top:0}
+.set>div:first-child{flex:1}.set small{display:block;color:var(--mut);font-size:12px;margin-top:2px}
+input[type=text],input[type=password],select,textarea{padding:9px 11px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--tx);font:inherit;min-width:230px;max-width:100%}
+textarea{width:100%;height:240px;font:12px Consolas,"Nirmala UI",monospace}
+.sw{appearance:none;width:42px;height:24px;min-width:0;border-radius:12px;background:var(--card2);border:1px solid var(--line);position:relative;cursor:pointer;flex:none;padding:0}
+.sw::after{content:"";position:absolute;left:2px;top:2px;width:18px;height:18px;border-radius:50%;background:var(--mut);transition:.15s}.sw:checked{background:var(--acc);border-color:var(--acc)}.sw:checked::after{left:20px;background:#fff}
+.btn{padding:9px 16px;border:0;border-radius:9px;background:var(--acc);color:#fff;cursor:pointer;margin:6px 8px 6px 0}.btn.g{background:var(--card2);color:var(--tx)}
+.vg{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:12px}
+.vc{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:11px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card);cursor:pointer}
+.vc:hover{border-color:var(--acc)}.vc.sel{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}.vc small{display:block;color:var(--mut)}.vc button{border:0;background:var(--card2);border-radius:8px;padding:6px 11px;cursor:pointer}
+.sw8{display:flex;gap:8px}.sw8 i{width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent}.sw8 i.on{border-color:var(--tx)}
+.seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}.seg button{border:0;background:none;padding:8px 14px;cursor:pointer}.seg button.on{background:var(--acc);color:#fff}
+.note{font-size:12px;color:var(--mut);max-width:620px;margin:6px 0 14px}
+#ob{position:fixed;inset:44px 0 0 0;background:var(--bg);z-index:10;overflow:auto;padding:28px 8%;display:none}#ob.on{display:block}
+input[type=range]{min-width:180px}
+#strip{display:flex;align-items:center;gap:14px;padding:11px 22px;border-bottom:1px solid var(--line);background:linear-gradient(90deg,color-mix(in srgb,var(--acc) 10%,transparent),transparent 70%)}
+#dot{width:10px;height:10px;border-radius:50%;background:var(--mut);flex:none}
+#strip.on #dot{background:var(--ok);animation:pulse 2.4s infinite}#strip.bad #dot{background:var(--bad)}#strip.wait #dot{background:#f7c948;animation:pulse 1.2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ok) 55%,transparent)}100%{box-shadow:0 0 0 9px transparent}}
+#strip .tx{flex:1;min-width:0}#pt{display:block;font-weight:600}#ps{display:block;color:var(--mut);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#bar{height:3px;border-radius:2px;background:var(--card2);margin-top:5px;overflow:hidden;display:none}#bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .4s}
+#pwl{font-size:12px;color:var(--mut);white-space:nowrap}
+.btn:hover{filter:brightness(1.1)}.btn:active{transform:translateY(1px)}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.addr{font:13px Consolas,"Cascadia Mono",monospace;background:var(--card2);padding:6px 10px;border-radius:8px;user-select:all}
+#alias{color:var(--mut);font-size:12px;margin:2px 0 10px}
+body.phone #tb{display:none}
+body.phone #side{position:fixed;z-index:20;top:0;bottom:0;left:0;width:84%;max-width:320px;transform:translateX(-100%);transition:transform .22s;box-shadow:12px 0 40px #0008;padding-top:calc(12px + env(safe-area-inset-top))}
+body.phone.nav-open #side{transform:none}
+#scrim{display:none}body.phone.nav-open #scrim{display:block;position:fixed;inset:0;background:#0007;z-index:19}
+#mbar{display:none;align-items:center;gap:10px;padding:calc(8px + env(safe-area-inset-top)) 12px 8px;border-bottom:1px solid var(--line)}#mbar b{flex:1}body.phone #mbar{display:flex}
+body.phone #msgs{padding:16px 12px 8px}body.phone #cf{margin:6px 12px calc(14px + env(safe-area-inset-bottom))}
+body.phone #strip{padding:9px 14px}body.phone #sbody{padding:16px 14px}body.phone #tabs{padding:8px 12px 0}
+body.phone .set{flex-wrap:wrap}body.phone input[type=text],body.phone input[type=password],body.phone select{min-width:0;width:100%}body.phone .vg{grid-template-columns:1fr}
+body.phone #rowAuto,body.phone #rowLan{display:none}body.phone .desk{display:none}
+</style></head><body>
+<div id="tb"><div id="lights"><button class="l r" id="wc" title="Close">×</button><button class="l y" id="wm" title="Minimize">−</button><button class="l g" id="wf" title="Full screen">+</button></div>
+<button class="ib" id="sbt" title="Show / hide sidebar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></svg></button>
+<div id="ttl">Paru</div><button class="ib" id="tg" title="Dark / light mode"></button></div>
+<div id="wrap">
+<div id="side">
+ <button class="nav" id="nNew"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>New chat</button>
+ <button class="nav" id="nHist"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>History</button>
+ <div id="hs"><span>Chats and tasks</span><div><button class="ib" id="hq" title="Search" style="width:28px;height:26px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg></button><button class="ib" id="hf" title="Show: all / chats / tasks" style="width:28px;height:26px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M7 12h10M10 18h4"/></svg></button></div></div>
+ <div id="hl"></div>
+ <button class="nav" id="nSet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>Settings</button>
+ <div id="foot"><span id="st">● Agent offline</span><button id="talk">Talk</button></div>
+</div>
+<div id="scrim"></div>
+<div id="main">
+ <div id="mbar"><button class="ib" id="mmenu" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button><b>Paru</b><button class="ib" id="tg2" aria-label="Theme"></button></div>
+ <div id="strip" class="wait"><span id="dot"></span><div class="tx"><b id="pt">Starting…</b><small id="ps"></small><div id="bar"><i></i></div></div><span id="pwl">Listening</span><input type="checkbox" class="sw" id="pwsw" aria-label="Paru on or off" title="Paru on / off"></div>
+ <div class="pg on" id="chat"><div id="msgs"></div>
+  <div id="cf"><input id="ci" placeholder="Ask Paru anything, in any language…" autocomplete="off"><button class="rb" id="mk" title="Talk to Paru (Ctrl+Shift+Space)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></button><button class="rb pri" id="cs" title="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></div></div>
+ <div class="pg" id="settings"><div id="tabs"></div><div id="sbody">
+
+ <div class="tab" id="t-general"><h2>General</h2><p class="sub">Everything saves as soon as you change it. You can also say these out loud, for example “switch to light mode” or “speak faster”.</p>
+<div class="card" id="acct"><div class="set"><div><b id="acN">Signed in</b><small id="acE"></small></div><button class="btn g" id="acOut">Sign out</button></div>
+<div class="set"><div>AI service &amp; key<small id="acP"></small></div><button class="btn g" data-setup="key">Change</button></div>
+<div class="set"><div>Wake &amp; off words<small id="acW"></small></div><button class="btn g" data-setup="words">Change</button></div>
+<div class="set"><div>Voice recognition<small>Teach Paru your voice again</small></div><button class="btn g" data-setup="voice">Retrain</button></div>
+<div class="set"><div>Permissions<small>What Paru may do, task by task</small></div><button class="btn g" data-setup="perms">Review</button></div></div>
+  <div class="card">
+   <div class="set"><div>VOICE_KEY (your secret word)<small>Must match VOICE_KEY in the agent's keys</small></div><input type="password" id="sk"></div>
+   <div class="set"><div>Agent address<small>Where the agent runs</small></div><input type="text" id="sv"></div>
+   <div class="set"><div>Language<small>Automatic understands every language</small></div><select id="sl"><option value="auto">Automatic (any language)</option></select></div>
+   <div class="set"><div>Listen for “hello Paru” all the time<small>Off: Paru does not listen at all. Turn it on again from the switch at the top, the tray icon, or Ctrl+Shift+Space</small></div><input type="checkbox" class="sw" id="sw"></div>
+   <div class="set" id="rowAuto"><div>Start Paru when I sign in<small>So “hello Paru” works right after the computer starts</small></div><input type="checkbox" class="sw" id="sau"></div>
+   <div class="set" id="rowLan"><div>Let my phone connect<small id="lanS">Opens the agent to your home network. Your VOICE_KEY still protects it</small></div><input type="checkbox" class="sw" id="slan"></div>
+   <div class="set"><div>Speaking speed</div><select id="sr"><option value="-20">Slower</option><option value="0">Normal</option><option value="15">Faster</option></select></div>
+   <div class="set"><div>Hide Paru after silence<small>“Never” keeps it open until you say “shut up”</small></div><select id="sh"><option value="0">Never</option><option value="30">30 seconds</option><option value="120">2 minutes</option><option value="600">10 minutes</option></select></div>
+   <div class="set"><div>Let me interrupt Paru by speaking<small>Say “stop” while Paru talks</small></div><input type="checkbox" class="sw" id="si"></div>
+   <div class="set"><div>Ask before opening, closing or downloading</div><input type="checkbox" class="sw" id="sa"></div>
+   <div class="set"><div>When I close this window<small>Background keeps “hello Paru” working</small></div><select id="sc"><option value="0">Keep Paru listening in the background</option><option value="1">Quit Paru completely</option></select></div>
+  </div></div>
+
+ <div class="tab" id="t-voices"><h2>Voices</h2><p class="sub"><span id="vn"></span> human voices. Paru uses your choice when it answers in that language and a matching voice for other languages. Say “change voice” any time.</p><select id="vl"></select><div class="vg" id="vg"></div></div>
+
+<div class="tab" id="t-recog"><h2>Voice recognition</h2><p class="sub">Paru listens for <b>“Hello Paru”</b> on this computer, offline. Teaching it takes 20 seconds: it learns how your voice and microphone sound, and it can ignore other people.</p><p id="alias"></p>
+  <div class="card"><div class="set"><div>Only wake up for my voice<small id="vs">Not trained yet</small></div><input type="checkbox" class="sw" id="vk"></div>
+   <div class="set"><div>Strictness<small>Lower = easier to wake, higher = stricter</small></div><input type="range" id="vt" min="60" max="97" step="1"></div></div>
+  <button class="btn" id="vtr">Teach Paru my voice</button><button class="btn g" id="vcl">Forget my voice</button><p class="note" id="eng"></p>
+  <p class="note">This is a basic voice match based on how your voice sounds on this microphone. It reduces false wake-ups but it is not a security lock. Once a conversation has started, Paru answers whoever is speaking.</p></div>
+
+ <div class="tab" id="t-perm"><h2>Permissions</h2><p class="sub">Paru only does what you allow. Change any of these at any time.</p><div id="pl"></div></div>
+
+ <div class="tab" id="t-asst"><h2>Assistant</h2><p class="sub">Your mail, calendar, tasks and daily report. Paru drafts replies, and nothing is sent to a client until you press Send in Telegram.</p>
+  <div class="card" id="af"></div>
+  <button class="btn" id="bm">Check my mail now</button><button class="btn g" id="bc">What is on my calendar?</button><button class="btn g" id="br">Send daily report now</button>
+  <p class="note">The daily report covers yesterday 5 PM to today 5 PM and arrives at 5 PM. Paru cannot answer or end phone calls on this computer.</p></div>
+
+ <div class="tab" id="t-keys"><h2>Keys</h2><p class="sub">Your private keys. Saving restarts the agent (about 10 seconds).</p><div class="card" id="kf"></div>
+  <button class="btn" id="ks">Save keys</button><button class="btn g" id="kr">Edit raw file</button><div id="raw" style="display:none"><textarea id="ke" spellcheck="false"></textarea><br><button class="btn" id="kw">Save raw file</button></div></div>
+
+ <div class="tab" id="t-cust"><h2>Customize</h2><p class="sub">Make Paru look and behave the way you like.</p>
+  <div class="card">
+   <div class="set"><div>Theme</div><div class="seg" id="cth"><button data-v="dark">Dark</button><button data-v="light">Light</button><button data-v="system">System</button></div></div>
+   <div class="set"><div>Accent color</div><div class="sw8" id="cac"></div></div>
+   <div class="set"><div>Orb size</div><div class="seg" id="cor"><button data-v="small">Small</button><button data-v="medium">Medium</button><button data-v="large">Large</button></div></div>
+   <div class="set"><div>Text size</div><div class="seg" id="cfs"><button data-v="small">Small</button><button data-v="normal">Normal</button><button data-v="large">Large</button></div></div>
+  </div><button class="btn g" id="crs">Reset customization</button></div>
+ </div></div>
+</div></div>
+<div id="ob"><h2>Welcome to Paru</h2><p class="sub">Choose what Paru may do. You can change this later in Settings → Permissions.</p><div id="ol"></div>
+ <button class="btn" id="oa">Allow selected</button><button class="btn g" id="oall">Allow everything</button><button class="btn g" id="on">Not now</button>
+ <p class="note">After this, Paru will ask you to say four short phrases so it can learn your voice.</p></div>
+<script src="voices.js"></script><script src="orb.js"></script><script src="engine.js"></script>
+<script>
+const $=id=>document.getElementById(id),$$=s=>document.querySelectorAll(s);let C={perms:{}};const WW=()=>C.wakeWord||"Hey Paru",OW=()=>C.offWord||"Turn off Paru";
+const ICON={sun:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/></svg>',moon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 13A9 9 0 1111 3a7 7 0 0010 10z"/></svg>'};
+const sav=async c=>{C=await P.setCfg(c);apply();return C};
+/* ===== look ===== */
+function apply(){let t=C.theme||"dark";if(t==="system")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";
+ document.documentElement.dataset.theme=t;$("tg").innerHTML=$("tg2").innerHTML=t==="dark"?ICON.sun:ICON.moon;
+ document.documentElement.style.setProperty("--acc",C.accent||"#8a6bff");if(window.heroOrb)heroOrb.applyCfg(C);document.documentElement.style.setProperty("--fs",{small:"13px",normal:"14px",large:"16px"}[C.fontSize]||"14px")}
+$("tg").onclick=$("tg2").onclick=()=>sav({theme:document.documentElement.dataset.theme==="dark"?"light":"dark"});
+$("wc").onclick=()=>P.win("close");$("wm").onclick=()=>P.win("min");$("wf").onclick=()=>P.win("full");
+$("sbt").onclick=()=>document.body.classList.toggle("sb-off");
+addEventListener("keydown",e=>{if(e.key==="Escape")P.win("full-exit")});
+/* ===== navigation ===== */
+function view(v){$("chat").classList.toggle("on",v==="chat");$("settings").classList.toggle("on",v==="settings");$("nSet").classList.toggle("on",v==="settings")}
+const TABS=[["general","General"],["voices","Voices"],["recog","Voice recognition"],["perm","Permissions"],["asst","Assistant"],["keys","Keys"],["cust","Customize"]];
+TABS.forEach(([k,n])=>{const b=document.createElement("button");b.textContent=n;b.dataset.k=k;b.onclick=()=>tab(k);$("tabs").append(b)});
+function tab(k){view("settings");$$("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.k===k));$$(".tab").forEach(t=>t.classList.toggle("on",t.id==="t-"+k));
+ if(k==="perm")permRows($("pl"));if(k==="voices")voiceList();if(k==="keys"||k==="asst")envLoad();if(k==="recog")recogUi()}
+$("nSet").onclick=()=>tab("general");P.onGoto(s=>tab({general:"general",voices:"voices",permissions:"perm",assistant:"asst",keys:"keys",customize:"cust"}[s]||"general"));
+$("nNew").onclick=()=>newChat();$("nHist").onclick=()=>{$("nHist").classList.toggle("on");$("hs").style.display=$("hl").style.display=$("nHist").classList.contains("on")?"":"none"};
+$("talk").onclick=()=>P.talk();$("mk").onclick=()=>P.talk();
+/* ===== chats & tasks (History) ===== */
+let ITEMS=[],TASKS=[],SESS=[],cur=null,filt="all",qry="",pendingNew=false;
+const T=s=>new Date(s.replace(" ","T"));
+function sessions(items){let br=[];try{br=JSON.parse(localStorage.breaks||"[]")}catch{}const out=[];let c=null,prev=null;
+ for(const i of items){const brk=br.some(b=>(!prev||prev.ts<b)&&i.ts>=b),gap=prev&&(T(i.ts)-T(prev.ts))>30*60e3;if(!c||brk||gap){c={start:i.ts,msgs:[]};out.push(c)}c.msgs.push(i);prev=i}return out}
+const title=s=>{const f=s.msgs.find(m=>m.who==="You");const t=(f?f.text:s.msgs[0].text)||"Chat";return t.length>42?t.slice(0,42)+"…":t}
+function drawList(){const L=$("hl");L.innerHTML="";let n=0;
+ if(filt!=="tasks")[...SESS].reverse().forEach((s,ix)=>{const t=title(s);if(qry&&!t.toLowerCase().includes(qry))return;n++;const d=document.createElement("div");d.className="it"+(cur===s.start?" on":"");d.innerHTML="<i></i><span></span><small>"+s.start.slice(5,10)+"</small>";d.querySelector("span").textContent=t;d.onclick=()=>{cur=s.start;pendingNew=false;showSession();drawList();view("chat")};L.append(d)});
+ if(filt!=="chats")TASKS.forEach(t=>{if(qry&&!t.title.toLowerCase().includes(qry))return;n++;const d=document.createElement("div");d.className="it t"+(t.status==="done"?" done":"");d.innerHTML="<i></i><span></span><small></small>";d.querySelector("span").textContent=t.title;d.querySelector("small").textContent=t.due?t.due.slice(5):"";
+  d.title=t.status==="done"?"Done":"Click to mark as done";d.onclick=()=>{if(t.status!=="done"&&confirm("Mark done: "+t.title+"?"))ask("Mark task "+t.id+" as done",true)};L.append(d)});
+ if(!n){const e=document.createElement("div");e.className="empty";e.textContent=$("st").classList.contains("on")?"Nothing here yet. Say “hello Paru”.":"The agent is offline, so history can't load yet.";L.append(e)}}
+async function loadHist(){const [h,t]=await Promise.all([P.api("/voice/history"),P.api("/voice/tasks")]);
+ if(!h.error){ITEMS=h.items;SESS=sessions(ITEMS);if(!cur&&!pendingNew&&SESS.length)cur=SESS[SESS.length-1].start;
+  if(pendingNew&&SESS.length&&SESS[SESS.length-1].start>=pendingNew){pendingNew=false;cur=SESS[SESS.length-1].start}
+  if(cur&&SESS.length&&cur===SESS[SESS.length-1].start)showSession(true)}
+ if(!t.error)TASKS=t.items;drawList()}
+function bub(who,text,ts){const r=document.createElement("div");r.className="row"+(who==="You"?" me":"");const b=document.createElement("div");b.className="bub";b.textContent=text;if(ts){const s=document.createElement("small");s.textContent=ts.slice(11);b.append(s)}r.append(b);return r}
+function hero(){const h=document.createElement("div");h.id="hero";h.innerHTML='<div class="o paru-orb"></div><h1></h1><p class="hp"></p><div class="chips"></div>';h.querySelector('.hp').textContent='Ask in any language, or say “'+WW()+'”. Say “shut up” and I will go quiet.';
+ {const bo=ParuOrb.mount(h.querySelector(".o"),document.createElement("div"));bo.applyCfg(C);bo.state("listening")}const hr=new Date().getHours();h.querySelector("h1").textContent=(hr<12?"Good morning":hr<17?"Good afternoon":"Good evening")+(C.owner?", "+C.owner:"");
+ [["Check my mail","Check my mail"],["My calendar","What is on my calendar today?"],["My tasks","What are my tasks?"],["Daily report","Send me today's daily report"],["Waiting clients","Which client messages are waiting for my reply?"]].forEach(([a,q])=>{const b=document.createElement("button");b.textContent=a;b.onclick=()=>ask(q);h.querySelector(".chips").append(b)});return h}
+function showSession(keep){const M=$("msgs");const s=SESS.find(x=>x.start===cur);const stick=M.scrollTop+M.clientHeight>=M.scrollHeight-40;
+ if(keep&&M.dataset.n==String(s?s.msgs.length:0))return;M.innerHTML="";M.dataset.n=s?s.msgs.length:0;
+ if(!s){M.append(hero());return}s.msgs.forEach(m=>M.append(bub(m.who,m.text,m.ts)));if(!keep||stick)M.scrollTop=1e9}
+function newChat(){let b=[];try{b=JSON.parse(localStorage.breaks||"[]")}catch{}const n=new Date(),p=x=>String(x).padStart(2,"0");
+ const ts=n.getFullYear()+"-"+p(n.getMonth()+1)+"-"+p(n.getDate())+" "+p(n.getHours())+":"+p(n.getMinutes());b.push(ts);localStorage.breaks=JSON.stringify(b.slice(-200));
+ pendingNew=ts;cur=null;$("msgs").dataset.n="x";$("msgs").innerHTML="";$("msgs").append(hero());view("chat");$("ci").focus();drawList()}
+$("hf").onclick=()=>{filt={all:"chats",chats:"tasks",tasks:"all"}[filt];$("hf").title="Showing: "+filt;drawList()};
+$("hq").onclick=()=>{const q=prompt("Search chats and tasks");qry=(q||"").toLowerCase().trim();drawList()};
+/* ===== chat sending ===== */
+async function ask(q,quiet){view("chat");const M=$("msgs");const h=$("hero");if(h)h.remove();M.append(bub("You",q));const w=bub("Paru","…");M.append(w);M.scrollTop=1e9;
+ const r=await P.api("/voice/text","POST",JSON.stringify({text:q}));const bx=w.querySelector(".bub");
+ if(r.error){bx.textContent=r.error==="unreachable"?"I can't reach the agent yet. Check the status at the bottom left.":"Wrong VOICE_KEY. Open Settings → General.";return}
+ let out=r.text||"";const a=r.action||{type:"none"};
+ if(a.type==="set_setting"){const[k,v]=String(a.target).split("=");const m={theme:["theme",v],language:["lang",v],wake:["wake",/^(on|true)$/.test(v)],accent:["accent",null],orbsize:["orbSize",v],closing:["closeQuits",v==="quit"]}[(k||"").trim()];if(m&&m[1]!==null){await sav({[m[0]]:m[1]});out=out||"Done."}}
+ else if(a.type==="open_settings")tab({general:"general",voices:"voices",permissions:"perm",assistant:"asst",keys:"keys",customize:"cust"}[a.target]||"general");
+ else if(a.type&&!/^(none|stop|sleep|check_mail|check_calendar|daily_report|draft_reply|change_voice|complete_task)$/.test(a.type)){const x=await P.act(a.type,a.target);
+  if(/^no-permission/.test(x))out="I don't have permission for that yet. Open Settings → Permissions.";else if(x==="denied")out="Okay, I won't.";else if(x!=="ok")out="Sorry, I couldn't do that."}
+ bx.textContent=out||"Done.";M.scrollTop=1e9;setTimeout(loadHist,800)}
+$("cs").onclick=()=>{const v=$("ci").value.trim();if(v){$("ci").value="";ask(v)}};$("ci").onkeydown=e=>{if(e.key==="Enter")$("cs").click()};
+/* ===== permissions ===== */
+const GROUPS=[["On this computer",[["mic","Microphone","Hear you say your wake word"],["apps","Apps","Open and close programs"],["files","Files, folders & notes","Open Documents, Downloads, Desktop and save notes"],["photos","Photos & videos","Open your Pictures and Videos folders"],["screenshot","Screenshots","Take a picture of your screen"],["system","Lock screen","Lock this computer"],["contacts","Contacts","Look up people when you ask"],["calls","Calls","Make calls through your connected phone account"]]],
+["Online",[["browser","Browser","Open websites"],["search","Search","Search the web for you"],["download","Downloads","Save files to your Downloads folder"],["upload","Upload","Send files to Drive and other services"],["reply","Replies","Draft replies to clients (you confirm each one)"],["update","Updates","Check for and install Paru updates"],["onlineCalls","Online apps","Reply in WhatsApp, Instagram, Facebook, email"]]]];
+const PV=[["ask","Ask me first"],["allow","Always allow"],["deny","Never"]];
+function permRows(el){el.innerHTML="";const hint=document.createElement("p");hint.className="sub";hint.textContent="The first time Paru is asked to do something new, it asks you, out loud and on screen. Choose Always allow to stop being asked for that kind of task.";el.append(hint);
+ for(const[g,items]of GROUPS){if(!P.isElectron&&g==="On this computer")continue;const c=document.createElement("div");c.className="card";const h=document.createElement("div");h.className="set";h.innerHTML="<b>"+g+"</b>";c.append(h);
+  for(const[k,n,d]of items){if(!P.isElectron&&k!=="mic")continue;const r=document.createElement("div");r.className="set";r.innerHTML="<div>"+n+"<small>"+d+"</small></div>";const sel=document.createElement("select");sel.className="pv";sel.dataset.k=k;PV.forEach(([v,l])=>sel.add(new Option(l,v)));sel.value=C.perms[k]||"ask";r.append(sel);c.append(r)}el.append(c)}}
+const readPerms=el=>{const p={};el.querySelectorAll("select.pv").forEach(i=>p[i.dataset.k]=i.value);return p};
+async function applyPerms(p){if(p.mic==="allow"){try{(await navigator.mediaDevices.getUserMedia({audio:true})).getTracks().forEach(t=>t.stop())}catch{p.mic="ask";alert("The system blocked the microphone. Turn it on in your system's privacy settings.")}}
+ await sav({perms:p})}
+$("pl").addEventListener("change",async e=>{if(e.target.classList.contains("pv")){await applyPerms(readPerms($("pl")));permRows($("pl"))}});
+function onboard(){permRows($("ol"));$("ob").classList.add("on")}
+$("oa").onclick=async()=>{$("ob").classList.remove("on");await applyPerms(readPerms($("ol")),true)};
+$("oall").onclick=async()=>{$$("#ol .sw").forEach(i=>i.checked=true);$("ob").classList.remove("on");await applyPerms(readPerms($("ol")),true)};
+$("on").onclick=async()=>{$("ob").classList.remove("on");await sav({onboarded:true})};
+/* ===== general ===== */
+Object.entries(PARU_VOICES.langs).forEach(([k,v])=>{const o=document.createElement("option");o.value=k;o.textContent=v[0];$("sl").append(o)});
+const bind=(id,key,conv)=>{const e=$(id);const ev=e.type==="checkbox"||e.tagName==="SELECT"?"change":"change";e.addEventListener(ev,()=>sav({[key]:conv?conv(e):(e.type==="checkbox"?e.checked:e.value.trim())}))};
+bind("sk","key");bind("sv","server");bind("sau","autostart");bind("slan","lan");bind("sl","lang");bind("sw","wake");bind("sr","rate",e=>+e.value);bind("sh","autoHide",e=>+e.value);bind("si","interrupt");bind("sa","askEach");bind("sc","closeQuits",e=>e.value==="1");
+function fill(){$("sk").value=C.key||"";$("sv").value=C.server;$("sau").checked=C.autostart!==false;$("slan").checked=!!C.lan;if(P.lanInfo)P.lanInfo().then(i=>{$("lanS").innerHTML=C.lan&&i.ip?"On your phone enter: <span class=\"addr\">http://"+i.ip+":"+i.port+"</span> \u00b7 key <span class=\"addr\">"+C.key+"</span>":"Opens the agent to your home network. Your VOICE_KEY still protects it"});$("sl").value=C.lang;$("sw").checked=!!C.wake;$("sr").value=String(C.rate||0);$("sh").value=String(C.autoHide||0);$("si").checked=!!C.interrupt;$("sa").checked=!!C.askEach;$("sc").value=C.closeQuits?"1":"0";
+ $$(".seg").forEach(s=>{const k={cth:"theme",cor:"orbSize",cfs:"fontSize"}[s.id];s.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.v===C[k]))});
+ $$("#cac i").forEach(i=>i.classList.toggle("on",i.dataset.c===C.accent));$("vk").checked=!!C.voiceLock;$("vt").value=Math.round((C.voiceThr||.9)*100);recogUi()}
+/* ===== voices ===== */
+const HELLO={en:"Hello, I am Paru. How can I help you?",ta:"வணக்கம், நான் பாரு. உங்களுக்கு எப்படி உதவலாம்?",hi:"नमस्ते, मैं पारू हूँ। मैं आपकी कैसे मदद करूँ?",te:"నమస్కారం, నేను పారు.",ml:"നമസ്കാരം, ഞാൻ പാരു ആണ്.",kn:"ನಮಸ್ಕಾರ, ನಾನು ಪಾರು.",bn:"নমস্কার, আমি পারু।",mr:"नमस्कार, मी पारू आहे.",gu:"નમસ્તે, હું પારુ છું.",es:"Hola, soy Paru. ¿En qué puedo ayudarte?",fr:"Bonjour, je suis Paru. Comment puis-je vous aider ?",de:"Hallo, ich bin Paru. Wie kann ich helfen?",it:"Ciao, sono Paru. Come posso aiutarti?",pt:"Olá, eu sou a Paru. Como posso ajudar?",ru:"Здравствуйте, я Пару. Чем могу помочь?",ja:"こんにちは、パルです。",ko:"안녕하세요, 저는 파루입니다.",zh:"你好，我是帕鲁。",ar:"مرحباً، أنا بارو.",tr:"Merhaba, ben Paru."};
+let vaud;async function sample(v){if(vaud){vaud.pause();vaud=null}speechSynthesis.cancel();const t=HELLO[v.lang]||HELLO.en;
+ const r=await P.api("/voice/tts?text="+encodeURIComponent(t)+"&voice="+v.id,"GET",null,null,true);
+ if(r&&r.audio){vaud=new Audio(URL.createObjectURL(new Blob([r.audio],{type:"audio/mpeg"})));vaud.play();return}const u=new SpeechSynthesisUtterance(t);u.lang=v.lang;speechSynthesis.speak(u)}
+function voiceList(){$("vn").textContent=PARU_VOICES.all.length;const sel=$("vl");if(!sel.options.length){sel.innerHTML='<option value="">All languages</option>'+Object.entries(PARU_VOICES.langs).map(([k,v])=>'<option value="'+k+'">'+v[0]+"</option>").join("");sel.onchange=voiceList}
+ const g=$("vg");g.innerHTML="";PARU_VOICES.all.filter(v=>!sel.value||v.lang===sel.value).forEach(v=>{const d=document.createElement("div");d.className="vc"+(v.id===C.voice?" sel":"");
+  d.innerHTML="<div><b></b><small></small></div><button>▶</button>";d.querySelector("b").textContent=v.name;d.querySelector("small").textContent=v.group+" · "+(v.g==="F"?"Female":"Male");
+  d.querySelector("button").onclick=e=>{e.stopPropagation();sample(v)};d.onclick=async()=>{await sav({voice:v.id});voiceList();sample(v)};g.append(d)})}
+/* ===== voice recognition ===== */
+function recogUi(){$("vs").textContent=C.voiceprint&&C.vpVer===2?"Your voice is saved":"Not trained yet. Press the button below.";
+ P.api("/voice/asr").then(r=>{if(!r||r.error)return;$("alias").textContent=r.aliases&&r.aliases.length?"Paru also answers to how it hears you say the name: "+r.aliases.join(", "):"";
+  $("eng").textContent="Wake-word engine: "+({ready:"ready (offline)",downloading:"downloading "+r.pct+"%",loading:"loading…",error:"not available — "+(r.error||""),idle:"waiting"}[r.state]||r.state)+". Tip: say “hello Paru” clearly, then pause a moment."})}
+$("vk").onchange=()=>{if($("vk").checked&&!C.voiceprint){$("vk").checked=false;alert("Teach Paru your voice first.");return}sav({voiceLock:$("vk").checked})};
+$("vt").onchange=()=>sav({voiceThr:+$("vt").value/100});
+$("vtr").onclick=()=>P.openSetup("voice");
+$("vcl").onclick=async()=>{await sav({voiceprint:null,voiceLock:false,vpVer:0});await P.api("/voice/wake/forget","POST","{}");fill()};
+P.onEnrollDone(async r=>{C=await P.cfg();fill();$("vs").textContent=r.msg})
+/* ===== env (assistant + keys) ===== */
+const AF=[["OWNER_NAME","Your name",0],["GMAIL_ADDRESS","Gmail address",0],["GMAIL_APP_PASSWORD","Gmail app password (16 letters)",1],["CALENDAR_ICS_URL","Calendar link (Google Calendar → Settings → Secret address in iCal format)",1],["REPORT_HOUR","Daily report hour (17 = 5 PM)",0]];
+const KF=[["GEMINI_API_KEY","Gemini API key",1],["TELEGRAM_BOT_TOKEN","Telegram bot token",1],["TELEGRAM_OWNER_ID","Telegram owner ID",0],["VOICE_KEY","VOICE_KEY (same as in General)",1],["GOOGLE_CLIENT_ID","Google client ID",0],["GOOGLE_CLIENT_SECRET","Google client secret",1],["GOOGLE_REFRESH_TOKEN","Google refresh token",1],["GOOGLE_DRIVE_FOLDER_ID","Drive folder ID",0],["WHATSAPP_TOKEN","WhatsApp token",1],["WHATSAPP_PHONE_ID","WhatsApp phone ID",0],["META_PAGE_TOKEN","Instagram / Facebook page token",1],["TWILIO_SID","Twilio SID",0],["TWILIO_TOKEN","Twilio token",1],["TWILIO_FROM","Twilio number",0],["OWNER_PHONE","Your phone number",0]];
+let ENV="";
+const envGet=k=>{const m=ENV.match(new RegExp("^"+k+"=(.*)$","m"));return m?m[1].trim():""};
+const envSet=(k,v)=>{const re=new RegExp("^"+k+"=.*$","m");ENV=re.test(ENV)?ENV.replace(re,()=>k+"="+v):ENV.replace(/\s*$/,"\n")+k+"="+v+"\n"};
+function drawEnv(box,list){box.innerHTML="";list.forEach(([k,n,sec])=>{const r=document.createElement("div");r.className="set";r.innerHTML="<div></div>";r.firstChild.textContent=n;const i=document.createElement("input");i.type=sec?"password":"text";i.dataset.k=k;i.value=envGet(k);r.append(i);box.append(r)})}
+async function envLoad(){ENV=await P.envRead()||"";drawEnv($("af"),AF);drawEnv($("kf"),KF);$("ke").value=ENV}
+async function envSave(box){box.querySelectorAll("input").forEach(i=>envSet(i.dataset.k,i.value.trim()));await P.envWrite(ENV);setTimeout(ping,9000);alert("Saved. The agent is restarting (about 10 seconds).")}
+$("ks").onclick=()=>envSave($("kf"));$("kr").onclick=()=>{$("raw").style.display="block"};$("kw").onclick=async()=>{ENV=$("ke").value;await P.envWrite(ENV);setTimeout(ping,9000);alert("Saved.")};
+$("af").addEventListener("change",()=>{});
+const asstSave=document.createElement("button");asstSave.className="btn";asstSave.textContent="Save assistant settings";asstSave.onclick=()=>envSave($("af"));$("af").after(asstSave);
+$("bm").onclick=()=>ask("Check my mail now");$("bc").onclick=()=>ask("What is on my calendar today?");$("br").onclick=()=>ask("Send me today's daily report");
+/* ===== customize ===== */
+const ACC={"#8a6bff":"Violet","#5a8bff":"Blue","#ff5fa8":"Pink","#36d399":"Green","#9b6bff":"Purple","#ff9f43":"Orange","#ff5f57":"Red","#1ce6d1":"Teal"};
+Object.keys(ACC).forEach(c=>{const i=document.createElement("i");i.style.background=c;i.dataset.c=c;i.title=ACC[c];i.onclick=()=>sav({accent:c}).then(fill);$("cac").append(i)});
+$$(".seg").forEach(s=>s.querySelectorAll("button").forEach(b=>b.onclick=()=>sav({[{cth:"theme",cor:"orbSize",cfs:"fontSize"}[s.id]]:b.dataset.v}).then(fill)));
+$("crs").onclick=()=>sav({theme:"dark",accent:"#8a6bff",orbSize:"small",fontSize:"normal"}).then(fill);
+/* ===== phone (Android app): the voice engine runs inside this page and the orb is a full-screen layer ===== */
+function bootPhone(){document.body.classList.add("phone");
+ const L=document.createElement("div");L.id="orbLayer";L.style.cssText="position:fixed;inset:0;z-index:50;display:none;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 35%,#2a1d6bfa,#0a0912fc);padding:24px;text-align:center";
+ L.innerHTML='<div class="paru-orb" id="orbBig" style="--osz:170px"></div><div class="paru-bubble" id="bubBig" style="margin-top:26px;max-width:92%;font-size:18px"></div><button id="orbX" class="btn g" style="margin-top:22px;padding:12px 26px;border-radius:999px">Close</button>';
+ document.body.append(L);const orb=ParuOrb.mount($("orbBig"),$("bubBig"));let shown=false;
+ const ui={show(){shown=true;L.style.display="flex"},hide(){shown=false;L.style.display="none";orb.hideBubble()},visible:()=>shown,state:s=>orb.state(s),say:(a,b)=>orb.say(a,b),level:v=>orb.level(v),applyCfg:c=>orb.applyCfg(c)};
+ const E=new ParuEngine(P,ui);window.__E=E;$("orbBig").onclick=()=>E.orbClick();$("orbX").onclick=()=>E.endSession();
+ P.onCfg(c=>{E.setCfg(c);orb.applyCfg(c);E.poke()});P.onTalk(()=>E.talkNow());P.onEnroll(()=>E.enroll());
+ P.cfg().then(c=>{E.setCfg(c);orb.applyCfg(c);E.start()});
+ try{navigator.wakeLock&&navigator.wakeLock.request("screen").catch(()=>{})}catch{}
+ document.addEventListener("visibilitychange",()=>{if(!document.hidden){try{navigator.wakeLock&&navigator.wakeLock.request("screen").catch(()=>{})}catch{}E.poke()}});
+ $("mmenu").onclick=()=>document.body.classList.toggle("nav-open");$("scrim").onclick=()=>document.body.classList.remove("nav-open");
+ $$("#tabs button").forEach(b=>{if(b.dataset.k==="keys"||b.dataset.k==="asst")b.style.display="none"});
+ document.addEventListener("click",e=>{if(e.target.closest("#side .nav,#side .it"))document.body.classList.remove("nav-open")})}
+/* ===== status & start ===== */
+let AG={state:"starting",msg:""},EN={},ASR=null,AGOK=false,KEYBAD=false;
+async function ping(){const r=await P.api("/health");AGOK=!r.error&&r.ok;KEYBAD=false;
+ if(AGOK){const h=await P.api("/voice/asr");if(h&&h.error==="wrong key")KEYBAD=true;else ASR=h&&!h.error?h:null}
+ const e=$("st");e.className=AGOK&&!KEYBAD?"on":"";e.textContent=!AGOK?"● Agent offline":KEYBAD?"● Wrong key":"● Agent online";strip()}
+function strip(){const S=$("strip"),pt=$("pt"),ps=$("ps"),bar=$("bar");let cls="on",t="",s2="";bar.style.display="none";
+ const down=ASR&&(ASR.state==="downloading"||ASR.state==="loading");
+ if(!C.key){cls="bad";t="Add your VOICE_KEY";s2="Settings → General → VOICE_KEY (the same word as in the agent's keys)"}
+ else if(AG.state==="setup"||AG.state==="starting"&&!AGOK){cls="wait";t=AG.state==="setup"?"Setting up Paru's engine…":"Starting Paru…";s2=AG.msg||"This only takes a long time the very first time"}
+ else if(AG.state==="nopython"||(AG.state==="error"&&!AGOK)){cls="bad";t="Paru's engine could not start";s2=AG.msg}
+ else if(!AGOK){cls="bad";t="The agent is offline";s2=P.isElectron?"Paru is trying to start it. Open the tray menu → Restart agent":"Check the address in Settings → General and that the agent is running on your computer"}
+ else if(KEYBAD){cls="bad";t="Wrong VOICE_KEY";s2="Settings → General"}
+ else if(!C.wake){cls="";t="Paru is off";s2="Not listening. Turn the switch on, or press Ctrl+Shift+Space to talk once"}
+ else if(C.perms.mic!=="allow"){cls="bad";t="Microphone is off";s2="Settings → Permissions → Microphone"}
+ else if(EN.mic===false&&EN.micError&&EN.micError!=="permission"){cls="bad";t="The microphone is blocked";s2="Allow it in your system privacy settings"}
+ else if(down){cls="wait";t="Getting the offline wake-word engine ready…";s2="One-time download (about 100 MB). Hello Paru starts working when it finishes";bar.style.display="block";bar.firstChild.style.width=(ASR.pct||5)+"%"}
+ else if(ASR&&ASR.state==="error"){cls="wait";t="Listening (cloud mode)";s2="The offline wake-word engine could not download, so Paru uses Gemini to hear “hello Paru”. "+(ASR.error||"")}
+ else{t="Listening for “"+WW()+"”";s2="Say “shut up” to dismiss me · “"+OW()+"” to stop listening"}
+ S.className=cls;pt.textContent=t;ps.textContent=s2;$("pwsw").checked=!!C.wake;$("pwl").textContent=C.wake?"On":"Off"}
+$("pwsw").onchange=()=>sav({wake:$("pwsw").checked});
+P.onEngineStatus&&P.onEngineStatus(x=>{EN=x;strip()});P.onAgentStatus&&P.onAgentStatus(x=>{AG=x;strip();if(x.state==="online")setTimeout(ping,500)});
+P.agentStatus&&P.agentStatus().then(x=>{AG=x;strip()});
+setInterval(()=>{if(ASR&&ASR.state!=="ready"&&AGOK)ping()},3000);
+async function acct(){const a=await P.authState();$("acN").textContent=a.user?(a.user.name||a.user.email):"Not signed in";$("acE").textContent=a.user?a.user.email:"";const p=await P.providerStatus();
+ $("acP").textContent=p.id?(p.id+(p.model?" \u00b7 "+p.model:"")+(p.hasKey?" \u00b7 key saved "+(p.secure?"(encrypted by your system)":"(protected local file)"):"")):"Not set";$("acW").textContent=WW()+"  /  "+OW()}
+$$("[data-setup]").forEach(b=>b.onclick=()=>P.openSetup(b.dataset.setup));$("acOut").onclick=async()=>{if(confirm("Sign out of Paru? Your chats and settings stay on this device."))await P.authSignOut()};
+async function load(){C=await P.cfg();if(!P.isElectron){const a=await P.authState();if(!a.signedIn||!C.onboarded){location.replace("setup.html");return}bootPhone()}apply();fill();acct();$("hs").style.display=$("hl").style.display="none";$("msgs").append(hero());await ping();loadHist();if(!C.onboarded)onboard()}
+P.onCfg(c=>{C=c;apply();fill();strip();acct()});P.onFs(f=>$("wf").title=f?"Exit full screen":"Full screen");
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change",apply);
+setInterval(ping,15000);setInterval(()=>{if($("chat").classList.contains("on"))loadHist()},4000);load();
+</script></body></html>
