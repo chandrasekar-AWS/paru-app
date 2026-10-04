@@ -187,8 +187,11 @@ async def test_gemini():
     if not s["gemini_key"]:
         return {"ok": False, "error": "No API key saved yet."}
     try:
+        import time as _t
+        t0 = _t.time()
         data = await run_in_threadpool(llm._gemini, [{"role": "user", "parts": [{"text": "Reply with the single word: ready"}]}], s)
-        return {"ok": True, "reply": data["candidates"][0]["content"]["parts"][0].get("text", "").strip()}
+        ms = int((_t.time() - t0) * 1000)
+        return {"ok": True, "reply": f"Replied in {ms} ms ({s['gemini_model']})"}
     except Exception as e:
         return {"ok": False, "error": str(e)[:200]}
 

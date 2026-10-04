@@ -25,7 +25,9 @@ DEFAULTS = {
     "speak_replies": True,
     "autostart": True,
     "gemini_key": "",
-    "gemini_model": "gemini-2.5-flash",
+    "gemini_model": "gemini-flash-latest",
+    "thinking": "fast",              # fast (thinking turned down) | smart (model thinks longer, slower)
+    "fast_commands": True,           # timers/time/lock/open-app run instantly without the AI
     "whisper_model": "base",         # tiny | base | small
     "mail": {"address": "", "app_password": "", "imap_host": "imap.gmail.com", "smtp_host": "smtp.gmail.com"},
     "calendar_ics": "",              # secret iCal URL or a local .ics path

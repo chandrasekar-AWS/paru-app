@@ -7,13 +7,18 @@ const os = require('os');
 const net = require('net');
 const crypto = require('crypto');
 
-const PACKAGED = app.isPackaged;
-const ROOT = PACKAGED ? path.join(process.resourcesPath, 'paru') : path.resolve(__dirname, '..');
+const PACKAGED = app.isPackaged || process.env.PARU_TEST_PACKAGED === '1';
+function resolveRoot() {
+  const cands = [path.resolve(__dirname, '..'), path.join(process.resourcesPath || '', 'paru'), path.resolve(app.getAppPath(), '..')];
+  return cands.find(c => fs.existsSync(path.join(c, 'agent', 'server.py'))) || null;
+}
+const ROOT = resolveRoot();
 const HOME = process.env.PARU_HOME || path.join(os.homedir(), '.paru');
 const TOKEN = crypto.randomBytes(24).toString('base64url');
 const START_HIDDEN = process.argv.includes('--hidden');
 let port, engine, win, orbWin, tray, quitting = false, orbWanted = false, orbSize = 150, orbEnabled = true;
 
+process.on('uncaughtException', e => { log('uncaught', e && e.stack || e); try { showError('Paru hit an unexpected error', String(e && e.stack || e)); } catch {} });
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 app.on('second-instance', () => showMain());
 
@@ -40,34 +45,40 @@ function ensureEnv(splash) {
   log('venv', r1.status, r1.stderr);
   const vpy = process.platform === 'win32' ? path.join(venvDir, 'Scripts', 'python.exe') : path.join(venvDir, 'bin', 'python');
   const use = fs.existsSync(vpy) ? vpy : py;
-  const r2 = spawnSync(use, ['-m', 'pip', 'install', '--disable-pip-version-check', '-r', path.join(ROOT, 'requirements.txt')], { encoding: 'utf8' });
+  const r2 = spawnSync(use, ['-m', 'pip', 'install', '--disable-pip-version-check', '-r', path.join(ROOT || '.', 'requirements.txt')], { encoding: 'utf8' });
   log('pip core', r2.status, (r2.stderr || '').slice(-500));
   if (r2.status !== 0 || !hasCore(use)) return null;
   // optional voice packages install in the background; the engine detects them without a restart
-  const opt = spawn(use, ['-m', 'pip', 'install', '--disable-pip-version-check', '-r', path.join(ROOT, 'requirements-optional.txt')], { stdio: 'ignore', detached: true });
+  const opt = spawn(use, ['-m', 'pip', 'install', '--disable-pip-version-check', '-r', path.join(ROOT || '.', 'requirements-optional.txt')], { stdio: 'ignore', detached: true });
   opt.unref();
   return use;
 }
 
+let lastHealthErr = '';
 function freePort() { return new Promise(res => { const s = net.createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); }); }
-async function waitHealthy(ms = 30000) {
+async function waitHealthy(ms = 30000, failed = () => null) {
   const end = Date.now() + ms;
   while (Date.now() < end) {
-    try { const r = await fetch(`http://127.0.0.1:${port}/api/health`); if (r.ok) return true; } catch {}
+    try { const r = await fetch(`http://127.0.0.1:${port}/api/health`); if (r.ok) return true; } catch (e) { lastHealthErr = e.cause ? String(e.cause.message || e.cause) : String(e.message); }
+    if (failed()) return false;
     if (engine && engine.exitCode !== null) return false;
     await new Promise(r => setTimeout(r, 250));
   }
   return false;
 }
 async function startEngine(py) {
+  if (!ROOT) throw new Error('Could not find the Paru engine files (agent/server.py). Run Paru from the cloned repo: cd ~/paru-app/electron && electron .');
   port = await freePort();
-  engine = spawn(py === 'py' ? 'py' : py, [...(py === 'py' ? ['-3'] : []), '-m', 'agent.server', '--port', String(port)], {
-    cwd: ROOT, env: { ...process.env, PARU_TOKEN: TOKEN, PARU_HOME: HOME, PYTHONUNBUFFERED: '1' }, windowsHide: true });
-  let tail = '';
+  const args = [...(py === 'py' ? ['-3'] : []), '-m', 'agent.server', '--port', String(port)];
+  log('starting engine:', py, args.join(' '), 'cwd=' + ROOT);
+  let tail = '', spawnErr = null;
+  engine = spawn(py === 'py' ? 'py' : py, args, { cwd: ROOT, env: { ...process.env, PARU_TOKEN: TOKEN, PARU_HOME: HOME, PYTHONUNBUFFERED: '1' }, windowsHide: true });
+  engine.on('error', e => { spawnErr = e; log('engine spawn error', e.message); });
   engine.stdout.on('data', d => log('engine:', d.toString().trim()));
   engine.stderr.on('data', d => { tail = (tail + d.toString()).slice(-1500); log('engine!', d.toString().trim()); });
   engine.on('exit', code => { log('engine exit', code); if (!quitting && code) { engine = null; showError(`Paru's engine stopped (code ${code}).`, tail); } });
-  return waitHealthy().then(ok => { if (!ok) throw new Error(tail || 'The engine did not respond.'); });
+  const ok = await waitHealthy(30000, () => spawnErr);
+  if (!ok) throw new Error(spawnErr ? `Could not start Python (${py}): ${spawnErr.message}` : (tail || `The engine did not respond on port ${port} (${lastHealthErr || 'no error'}). See ${path.join(HOME, 'paru.log')}`));
 }
 
 /* ------------------------------------------------------------ windows */
@@ -86,7 +97,7 @@ function splash(msg) {
 }
 function createMain() {
   win = new BrowserWindow({ width: 1280, height: 820, minWidth: 760, minHeight: 560, frame: false, backgroundColor: bg, show: false, title: 'Paru',
-    icon: path.join(ROOT, 'ui', 'assets', 'icon.png'),
+    icon: ROOT ? path.join(ROOT, 'ui', 'assets', 'icon.png') : undefined,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url)) shell.openExternal(url); return { action: 'deny' }; });
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith(`http://127.0.0.1:${port}`) && !url.startsWith('data:')) { e.preventDefault(); if (/^https?:/.test(url)) shell.openExternal(url); } });
@@ -125,7 +136,7 @@ async function engineCall(p) { try { await fetch(`http://127.0.0.1:${port}${p}`,
 let talking = false;
 function toggleTalk() { talking = !talking; engineCall(`/api/listen/${talking ? 'activate' : 'deactivate'}`); }
 function createTray() {
-  const img = nativeImage.createFromPath(path.join(ROOT, 'ui', 'assets', 'icon.png')).resize({ width: 22, height: 22 });
+  const img = nativeImage.createFromPath(path.join(ROOT || '', 'ui', 'assets', 'icon.png')).resize({ width: 22, height: 22 });
   tray = new Tray(img); tray.setToolTip('Paru');
   tray.setContextMenu(Menu.buildFromTemplate([{ label: 'Open Paru', click: showMain }, { label: 'Talk to Paru', click: toggleTalk }, { type: 'separator' }, { label: 'Quit', click: () => app.quit() }]));
   tray.on('click', showMain);

@@ -78,25 +78,76 @@ NO = re.compile(r"^\s*(no|nope|nah|cancel|don'?t|do not|stop|never ?mind|deny|ро
 
 
 # ------------------------------------------------------------------ gemini
-def _gemini(contents, s):
+_client = None
+_THINK_MODE = {}           # model -> thinking setting that the API accepted: level | budget | none
+FAST_TOOLS = {"set_timer", "cancel_timers", "list_timers", "get_time", "lock_screen", "unlock_screen", "launch_app", "open_url"}
+
+
+def _http():
+    """One keep-alive connection reused for every call (saves a TLS handshake, ~0.3-1s each)."""
+    global _client
     import httpx
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{s['gemini_model']}:generateContent"
-    import platform
-    sysmsg = SYSTEM.format(now=time.strftime("%A %d %B %Y %I:%M %p"), name=s.get("name") or "there", os=platform.system())
-    body = {"systemInstruction": {"parts": [{"text": sysmsg}]}, "contents": contents,
-            "tools": [{"functionDeclarations": skills.declarations()}], "generationConfig": {"temperature": 0.4}}
-    with httpx.Client(timeout=45, transport=_transport) as c:
-        r = c.post(url, headers={"x-goog-api-key": s["gemini_key"]}, json=body)
+    if _transport is not None:                       # tests
+        return httpx.Client(timeout=45, transport=_transport)
+    if _client is None:
+        _client = httpx.Client(timeout=httpx.Timeout(45, connect=8), limits=httpx.Limits(keepalive_expiry=300))
+    return _client
+
+
+def _think_cfg(mode):
+    return {"level": {"thinkingLevel": "minimal"}, "budget": {"thinkingBudget": 0}}.get(mode)
+
+
+def _post(body, s):
+    """POST generateContent. Gemini 3.x thinks by default (slow); we turn thinking down unless the user chose 'smart'."""
+    model = s["gemini_model"]
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    if s.get("thinking") == "smart":
+        order = ["none"]
+    else:
+        order = [_THINK_MODE[model]] if model in _THINK_MODE else ["level", "budget", "none"]
+    t0 = time.time()
+    r = None
+    for mode in order:
+        b = dict(body)
+        gc = dict(b.get("generationConfig", {}))
+        tc = _think_cfg(mode)
+        if tc:
+            gc["thinkingConfig"] = tc
+        b["generationConfig"] = gc
+        c = _http()
+        try:
+            r = c.post(url, headers={"x-goog-api-key": s["gemini_key"]}, json=b)
+        finally:
+            if _transport is not None:
+                c.close()
+        if r.status_code == 400 and mode != "none" and "think" in r.text.lower():
+            continue                                 # this model rejects that thinking option: try the next one
+        if r.status_code < 400:
+            _THINK_MODE[model] = mode
+        break
+    print(f"[llm] {model} {int((time.time() - t0) * 1000)}ms http={r.status_code}", flush=True)
     if r.status_code == 429:
-        raise RuntimeError("Gemini rate limit reached. Try again in a minute.")
+        raise RuntimeError("Gemini rate limit reached. Try again in a minute, or switch to gemini-flash-lite-latest in Settings.")
     if r.status_code in (400, 403) and "API key" in r.text:
         raise RuntimeError("Your Gemini API key was rejected. Check it in Settings -> AI.")
+    if r.status_code == 404:
+        raise RuntimeError(f"Gemini doesn't know the model '{model}'. Use gemini-flash-latest in Settings -> AI.")
     r.raise_for_status()
     return r.json()
 
 
+def _gemini(contents, s):
+    import platform
+    sysmsg = SYSTEM.format(now=time.strftime("%A %d %B %Y %I:%M %p"), name=s.get("name") or "there", os=platform.system())
+    body = {"systemInstruction": {"parts": [{"text": sysmsg}]}, "contents": contents,
+            "tools": [{"functionDeclarations": skills.declarations()}],
+            "generationConfig": {"temperature": 0.4, "maxOutputTokens": 700}}
+    return _post(body, s)
+
+
 def _run_gemini(text, s):
-    hist = db.recent(12)
+    hist = db.recent(8)
     contents = [{"role": "user" if m["role"] == "user" else "model", "parts": [{"text": m["content"]}]} for m in hist]
     if not contents or contents[-1]["role"] != "user" or contents[-1]["parts"][0]["text"] != text:
         contents.append({"role": "user", "parts": [{"text": text}]})
@@ -181,6 +232,24 @@ def route_offline(t):
     return None
 
 
+def _fast_command(text, s):
+    """Simple commands (timers, time, lock, open an app/site) run instantly with no model call. None = not handled."""
+    if len(text) > 90:
+        return None
+    r = route_offline(text)
+    if not r or r[0] not in FAST_TOOLS:
+        return None
+    name, args = r
+    if name == "launch_app" and len(args["name"].split()) > 3:
+        return None
+    res = _call_tool(name, args, s)
+    if res.get("awaiting_confirmation"):
+        return f"Should I {res['action']}? Say yes or no."
+    if name == "launch_app" and not res.get("ok"):
+        return None                                   # not an installed app: let the AI understand what was meant
+    return _speakable(name, res)
+
+
 def _run_offline(text, s):
     r = route_offline(text)
     if not r:
@@ -212,15 +281,15 @@ def handle(text, channel="text"):
             reply = confirm(cid, bool(YES.match(text)))
             events.publish("thinking", on=False)
             return reply
-        try:
-            reply = _run_gemini(text, s) if s.get("gemini_key") else _run_offline(text, s)
-        except Exception as e:
-            fallback = route_offline(text)
-            if fallback:
-                reply = _run_offline(text, s)
-            else:
-                msg = str(e) if isinstance(e, RuntimeError) else "I couldn't reach the AI service. Check your internet connection."
-                reply = msg
+        reply = _fast_command(text, s) if s.get("fast_commands", True) else None
+        if reply is None:
+            try:
+                reply = _run_gemini(text, s) if s.get("gemini_key") else _run_offline(text, s)
+            except Exception as e:
+                if route_offline(text):
+                    reply = _run_offline(text, s)
+                else:
+                    reply = str(e) if isinstance(e, RuntimeError) else "I couldn't reach the AI service. Check your internet connection."
     finally:
         events.publish("thinking", on=False)
     reply = reply or "Done."
@@ -237,15 +306,12 @@ def summarize_day(day):
     transcript = "\n".join(f"{'User' if m['role'] == 'user' else 'Paru'}: {m['content']}" for m in msgs)[-12000:]
     if s.get("gemini_key"):
         try:
-            import httpx
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{s['gemini_model']}:generateContent"
             body = {"contents": [{"role": "user", "parts": [{"text":
                     "Summarize this day of conversations between a user and their assistant, as if telling the user out loud what happened. "
-                    "Plain spoken sentences, no markdown or lists, under 120 words, same language as the user.\n\n" + transcript}]}]}
-            with httpx.Client(timeout=45, transport=_transport) as c:
-                r = c.post(url, headers={"x-goog-api-key": s["gemini_key"]}, json=body)
-            r.raise_for_status()
-            parts = r.json()["candidates"][0]["content"]["parts"]
+                    "Plain spoken sentences, no markdown or lists, under 120 words, same language as the user.\n\n" + transcript}]}],
+                    "generationConfig": {"maxOutputTokens": 400}}
+            data = _post(body, s)
+            parts = data["candidates"][0]["content"]["parts"]
             txt = " ".join(p.get("text", "") for p in parts).strip()
             if txt:
                 return txt

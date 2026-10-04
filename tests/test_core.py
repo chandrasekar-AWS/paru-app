@@ -202,7 +202,7 @@ def txt(t):
 
 
 def test_gemini_tool_loop_runs_tool_then_answers():
-    config.save({"gemini_key": "k"})
+    config.save({"gemini_key": "k", "fast_commands": False})
     llm._transport, calls = gemini_transport([fc("set_timer", {"seconds": 120, "label": "pasta"}), txt("Timer set for two minutes.")])
     assert llm.handle("set a pasta timer for 2 minutes", "text") == "Timer set for two minutes."
     fr = calls[1]["contents"][-1]["parts"][0]["functionResponse"]
@@ -377,3 +377,53 @@ def test_voice_note_push_to_talk(monkeypatch):
     ls.ptt_start()
     ls.feed(speech(0.1))
     assert ls.ptt_stop() == ""
+
+
+# ---------------------------------------------------------------- speed
+def test_fast_commands_skip_the_model():
+    config.save({"gemini_key": "k"})
+    def boom(req): raise AssertionError("model must not be called for a simple timer")
+    llm._transport = httpx.MockTransport(boom)
+    t0 = time.time()
+    assert "Timer set for 2 minutes" in llm.handle("set a timer for 2 minutes", "text")
+    assert "AM" in llm.handle("what time is it", "text") or "PM" in llm.handle("what time is it", "text")
+    assert time.time() - t0 < 1.0
+
+
+def test_unknown_app_falls_through_to_the_model():
+    config.save({"gemini_key": "k"})
+    llm._transport, calls = gemini_transport([txt("I can't open doors, but I can open apps.")])
+    assert "doors" in llm.handle("open the pod bay doors", "text") and len(calls) == 1
+
+
+def test_thinking_is_turned_down_and_falls_back_when_model_rejects_it():
+    config.save({"gemini_key": "k", "fast_commands": False, "gemini_model": "gemini-x-flash"})
+    llm._THINK_MODE.clear()
+    seen = []
+    def handler(req):
+        b = json.loads(req.content); seen.append(b["generationConfig"])
+        if "thinkingLevel" in b["generationConfig"].get("thinkingConfig", {}):
+            return httpx.Response(400, text='{"error":{"message":"thinking_level is not supported"}}')
+        return httpx.Response(200, json=txt("hello there"))
+    llm._transport = httpx.MockTransport(handler)
+    assert llm.handle("tell me something nice please", "text") == "hello there"
+    assert seen[0]["thinkingConfig"] == {"thinkingLevel": "minimal"} and seen[1]["thinkingConfig"] == {"thinkingBudget": 0}
+    assert llm._THINK_MODE["gemini-x-flash"] == "budget"
+    llm.handle("and one more thing please", "text")      # remembered: goes straight to the accepted option
+    assert len(seen) == 3 and seen[2]["thinkingConfig"] == {"thinkingBudget": 0}
+    assert all(g["maxOutputTokens"] <= 700 for g in seen)
+
+
+def test_smart_mode_leaves_thinking_alone():
+    config.save({"gemini_key": "k", "fast_commands": False, "thinking": "smart", "gemini_model": "gemini-y-flash"})
+    llm._THINK_MODE.clear()
+    seen = []
+    llm._transport = httpx.MockTransport(lambda r: (seen.append(json.loads(r.content)["generationConfig"]), httpx.Response(200, json=txt("ok")))[1])
+    llm.handle("think hard about this question", "text")
+    assert "thinkingConfig" not in seen[0]
+
+
+def test_unknown_model_gives_clear_message():
+    config.save({"gemini_key": "k", "fast_commands": False, "gemini_model": "gemini-9-nope"})
+    llm._transport = httpx.MockTransport(lambda r: httpx.Response(404, text="not found"))
+    assert "gemini-flash-latest" in llm.handle("tell me about trees please", "text")

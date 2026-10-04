@@ -69,5 +69,8 @@
       "category": "Utility",
       "icon": "../ui/assets/icon.png"
     }
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
   }
 }
