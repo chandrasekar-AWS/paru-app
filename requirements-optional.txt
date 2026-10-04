@@ -1,0 +1,5 @@
+# Installed in the background on first run. Paru works without them and tells you what is missing.
+faster-whisper>=1.0      # speech recognition (wake word, voice notes) - any language
+edge-tts>=6.1            # natural neural voices
+pyautogui>=0.9.54        # type / press keys inside other apps (Windows, macOS, X11)
+resemblyzer>=0.1.3       # "only answer my voice"
