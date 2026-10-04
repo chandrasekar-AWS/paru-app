@@ -15,5 +15,6 @@ def clean():
         config.SETTINGS_FILE.unlink()
     config.save({"permissions": {k: True for k in config.DEFAULTS["permissions"]}})
     llm._pending.clear()
+    llm._COOLDOWN.clear(); llm._THINK_MODE.clear(); llm._announced["model"] = None
     llm._transport = None
     yield

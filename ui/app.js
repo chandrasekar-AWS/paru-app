@@ -262,6 +262,8 @@ function schema() {
     { t: 'Orb', f: [{ k: 'orb_enabled', l: 'Show the orb on screen', ty: 'toggle' }, { k: 'orb_size', l: 'Orb size', ty: 'range', min: 90, max: 300 }] },
     { t: 'AI', h: 'Free key at aistudio.google.com. Without it, Paru still handles built-in commands offline.', f: [
       { k: 'gemini_key', l: 'Gemini API key', ty: 'password' }, { k: 'gemini_model', l: 'Model', h: 'gemini-flash-latest is a good default', ty: 'text' },
+      { k: 'auto_switch_models', l: 'Switch model when a limit is reached', h: 'If the main model hits its free limit, Paru continues with a backup model', ty: 'toggle' },
+      { k: 'fallback_models', l: 'Backup models', h: 'Comma separated, tried in order', ty: 'text' },
       { k: 'thinking', l: 'Response speed', h: 'Fast turns the model\'s extra thinking down. Smart is slower but better for hard questions.', ty: 'select', o: [['fast', 'Fast'], ['smart', 'Smart (slower)']] },
       { k: 'fast_commands', l: 'Instant simple commands', h: 'Timers, time, lock and opening apps skip the AI and run immediately', ty: 'toggle' }, { l: 'Check connection', ty: 'button', b: 'Test', a: 'test/gemini' }] },
     { t: 'Mail', h: 'Use an app password (Gmail: Google Account -> Security -> App passwords). Stored only on this device.', f: [

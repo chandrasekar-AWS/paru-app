@@ -427,3 +427,57 @@ def test_unknown_model_gives_clear_message():
     config.save({"gemini_key": "k", "fast_commands": False, "gemini_model": "gemini-9-nope"})
     llm._transport = httpx.MockTransport(lambda r: httpx.Response(404, text="not found"))
     assert "gemini-flash-latest" in llm.handle("tell me about trees please", "text")
+
+
+# ---------------------------------------------------------------- model switching on rate limit
+def _by_model(handlers):
+    """handlers: model -> list of httpx.Response factories; records which model each request hit."""
+    hits = []
+    def h(req):
+        model = req.url.path.split("/models/")[1].split(":")[0]
+        hits.append(model)
+        return handlers[model]() if model in handlers else httpx.Response(500, text="x")
+    return httpx.MockTransport(h), hits
+
+
+def test_rate_limit_switches_to_backup_model_and_remembers():
+    config.save({"gemini_key": "k", "fast_commands": False, "gemini_model": "main-flash",
+                 "fallback_models": ["backup-lite", "third-lite"]})
+    q = events.subscribe()
+    llm._transport, hits = _by_model({"main-flash": lambda: httpx.Response(429, text='{"error":{"message":"quota"}}'),
+                                      "backup-lite": lambda: httpx.Response(200, json=txt("answered by backup"))})
+    assert llm.handle("tell me about rivers please", "text") == "answered by backup"
+    assert hits == ["main-flash", "backup-lite"]
+    assert any(e["type"] == "notice" and "backup-lite" in e["text"] for e in [q.get_nowait() for _ in range(q.qsize())])
+    llm.handle("and about lakes please", "text")           # main is cooling down: skipped, no wasted call
+    assert hits == ["main-flash", "backup-lite", "backup-lite"]
+
+
+def test_daily_quota_uses_long_cooldown_and_retry_delay_is_read():
+    class R:  # minimal stand-in
+        def __init__(self, t): self.text = t
+    assert llm._cooldown_seconds(R('{"quotaId":"GenerateRequestsPerDayPerProjectPerModel"}')) == 3600
+    assert llm._cooldown_seconds(R('{"retryDelay": "34s"}')) == 35
+    assert llm._cooldown_seconds(R("busy")) == 60
+
+
+def test_all_models_limited_gives_clear_wait_message_without_hammering():
+    config.save({"gemini_key": "k", "fast_commands": False, "gemini_model": "m1", "fallback_models": "m2"})
+    llm._transport, hits = _by_model({"m1": lambda: httpx.Response(429, text="x"), "m2": lambda: httpx.Response(429, text="x")})
+    assert "rate limit" in llm.handle("tell me about hills please", "text")
+    n = len(hits)
+    reply = llm.handle("tell me about hills again please", "text")
+    assert "free limit" in reply and "seconds" in reply and len(hits) == n      # no extra API calls
+
+
+def test_switching_can_be_turned_off():
+    config.save({"gemini_key": "k", "fast_commands": False, "gemini_model": "m1", "fallback_models": ["m2"], "auto_switch_models": False})
+    llm._transport, hits = _by_model({"m1": lambda: httpx.Response(429, text="x"), "m2": lambda: httpx.Response(200, json=txt("hi"))})
+    assert "rate limit" in llm.handle("tell me about seas please", "text") and hits == ["m1"]
+
+
+def test_wrong_model_name_recovers_through_backup():
+    config.save({"gemini_key": "k", "fast_commands": False, "gemini_model": "gemini-3.1-flash", "fallback_models": ["gemini-flash-lite-latest"]})
+    llm._transport, hits = _by_model({"gemini-3.1-flash": lambda: httpx.Response(404, text="nf"),
+                                      "gemini-flash-lite-latest": lambda: httpx.Response(200, json=txt("works"))})
+    assert llm.handle("tell me about stars please", "text") == "works" and hits == ["gemini-3.1-flash", "gemini-flash-lite-latest"]

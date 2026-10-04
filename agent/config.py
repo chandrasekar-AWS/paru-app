@@ -26,6 +26,8 @@ DEFAULTS = {
     "autostart": True,
     "gemini_key": "",
     "gemini_model": "gemini-flash-latest",
+    "auto_switch_models": True,       # on a rate limit, continue with a backup model
+    "fallback_models": ["gemini-flash-lite-latest", "gemini-3.1-flash-lite", "gemini-2.5-flash-lite"],
     "thinking": "fast",              # fast (thinking turned down) | smart (model thinks longer, slower)
     "fast_commands": True,           # timers/time/lock/open-app run instantly without the AI
     "whisper_model": "base",         # tiny | base | small

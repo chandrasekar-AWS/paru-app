@@ -98,9 +98,27 @@ def _think_cfg(mode):
     return {"level": {"thinkingLevel": "minimal"}, "budget": {"thinkingBudget": 0}}.get(mode)
 
 
-def _post(body, s):
-    """POST generateContent. Gemini 3.x thinks by default (slow); we turn thinking down unless the user chose 'smart'."""
-    model = s["gemini_model"]
+_COOLDOWN = {}             # model -> unix time until which we skip it (it returned 429)
+_announced = {"model": None}
+
+
+def _models_chain(s):
+    fb = s.get("fallback_models") or []
+    if isinstance(fb, str):
+        fb = [x.strip() for x in fb.split(",")]
+    chain = [s["gemini_model"]] + [m for m in fb if m and m != s["gemini_model"]]
+    return chain if s.get("auto_switch_models", True) else chain[:1]
+
+
+def _cooldown_seconds(r):
+    if "perday" in r.text.lower().replace(" ", "").replace("_", ""):
+        return 3600                                  # daily quota: don't retry this model for an hour
+    m = re.search(r'"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s', r.text)
+    return min(300, int(float(m.group(1))) + 1) if m else 60
+
+
+def _post_model(model, body, s):
+    """One model: POST generateContent. Gemini 3.x thinks by default (slow), so thinking is turned down unless 'smart'."""
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     if s.get("thinking") == "smart":
         order = ["none"]
@@ -127,12 +145,39 @@ def _post(body, s):
             _THINK_MODE[model] = mode
         break
     print(f"[llm] {model} {int((time.time() - t0) * 1000)}ms http={r.status_code}", flush=True)
+    return r
+
+
+def _post(body, s):
+    """Try the main model, then the backup models. A model that hits its rate limit is skipped for a while."""
+    chain = _models_chain(s)
+    now = time.time()
+    ready = [m for m in chain if _COOLDOWN.get(m, 0) <= now]
+    if not ready:
+        wait = max(1, int(min(_COOLDOWN.get(m, now) for m in chain) - now))
+        wait_txt = f"{wait} seconds" if wait < 120 else f"{wait // 60} minutes"
+        raise RuntimeError(f"Every Gemini model is at its free limit right now. Try again in about {wait_txt}, or turn on billing for your key.")
+    r, used = None, None
+    for i, m in enumerate(ready):
+        r = _post_model(m, body, s)
+        used = m
+        if r.status_code == 429:
+            _COOLDOWN[m] = time.time() + _cooldown_seconds(r)
+            continue
+        if r.status_code in (404, 500, 502, 503, 504) and i < len(ready) - 1:
+            continue
+        break
+    if r.status_code < 400 and used != s["gemini_model"] and _announced["model"] != used:
+        _announced["model"] = used
+        events.publish("notice", level="info", text=f"{s['gemini_model']} is busy, so I'm using {used} for now.")
+    if r.status_code < 400 and used == s["gemini_model"]:
+        _announced["model"] = None
     if r.status_code == 429:
-        raise RuntimeError("Gemini rate limit reached. Try again in a minute, or switch to gemini-flash-lite-latest in Settings.")
+        raise RuntimeError("Gemini rate limit reached on every model. Wait a minute and try again, or turn on billing for your key.")
     if r.status_code in (400, 403) and "API key" in r.text:
         raise RuntimeError("Your Gemini API key was rejected. Check it in Settings -> AI.")
     if r.status_code == 404:
-        raise RuntimeError(f"Gemini doesn't know the model '{model}'. Use gemini-flash-latest in Settings -> AI.")
+        raise RuntimeError(f"Gemini doesn't know the model '{s['gemini_model']}'. Use gemini-flash-latest in Settings -> AI.")
     r.raise_for_status()
     return r.json()
 
