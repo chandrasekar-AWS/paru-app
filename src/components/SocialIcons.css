@@ -1,0 +1,11 @@
+/* Round social buttons — quiet by default, fill on hover */
+.social-btn {
+  width: 44px; height: 44px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff; text-decoration: none;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.16);
+  transition: background-color 0.2s var(--ease), color 0.2s var(--ease), border-color 0.2s var(--ease);
+}
+.social-btn:hover, .social-btn:focus-visible { background: var(--lime); border-color: var(--lime); color: var(--ink); text-decoration: none; }
+.social-btn svg { display: block; }
+.contact-detail-row .wa-glow { color: var(--lime-deep); }

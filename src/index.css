@@ -1,0 +1,121 @@
+/* ==========================================================================
+   AD ZONEX — design tokens + base styles
+   Palette comes from the logo: ink (charcoal) + brand lime.
+   ========================================================================== */
+:root {
+  /* colour */
+  --ink: #12151a;            /* dark surfaces: header, footer, hero */
+  --ink-2: #1b2027;          /* raised dark surface */
+  --ink-line: rgba(255, 255, 255, 0.12);
+  --paper: #f6f5f0;          /* page background */
+  --card: #ffffff;
+  --text: #14171a;
+  --text-muted: #5a6068;
+  --line: #e3e1d8;
+  --lime: #afcc39;           /* brand lime (matches logo) */
+  --lime-deep: #566b0e;      /* lime for text on light backgrounds (5.5:1) */
+  --lime-tint: #eef3d3;
+  --on-dark: #f2f4ee;
+  --on-dark-muted: #9aa29c;
+  --danger: #b3261e;
+
+  /* type */
+  --font-head: 'Poppins', 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'Open Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+  /* spacing + shape (8px scale) */
+  --s1: 0.5rem; --s2: 1rem; --s3: 1.5rem; --s4: 2rem; --s5: 3rem; --s6: 4.5rem; --s7: 6rem;
+  --radius: 10px;
+  --radius-lg: 16px;
+  --container: 1200px;
+  --gutter: clamp(1.25rem, 4vw, 2.5rem);
+  --header-h: 72px;
+  --shadow: 0 1px 2px rgba(18, 21, 26, 0.06), 0 8px 24px rgba(18, 21, 26, 0.06);
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: calc(var(--header-h) + 16px); -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+img { max-width: 100%; display: block; }
+a { color: inherit; }
+button { font-family: inherit; }
+h1, h2, h3, h4 { font-family: var(--font-head); line-height: 1.2; margin: 0; color: inherit; text-wrap: balance; }
+p { margin: 0; text-wrap: pretty; }
+
+:focus-visible { outline: 3px solid var(--lime); outline-offset: 3px; border-radius: 4px; }
+.on-light :focus-visible, .page :focus-visible { outline-color: var(--lime-deep); }
+.dark :focus-visible, .site-header :focus-visible, .site-footer :focus-visible { outline-color: var(--lime); }
+
+/* ---------- layout helpers ---------- */
+.page { min-height: 100vh; display: flex; flex-direction: column; }
+.page > main { flex: 1; }
+.container { width: 100%; max-width: calc(var(--container) + var(--gutter) * 2); margin: 0 auto; padding-inline: var(--gutter); }
+.section { padding-block: clamp(3.5rem, 8vw, 6rem); }
+.section--tight { padding-block: clamp(2.5rem, 5vw, 4rem); }
+.section--white { background: var(--card); }
+.section--ink { background: var(--ink); color: var(--on-dark); }
+
+.eyebrow {
+  display: inline-block;
+  font-family: var(--font-head);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--lime-deep);
+  margin-bottom: var(--s2);
+}
+.dark .eyebrow, .section--ink .eyebrow { color: var(--lime); }
+
+.section-head { max-width: 640px; margin-bottom: var(--s5); }
+.section-head h2 { font-size: clamp(1.7rem, 3.2vw, 2.4rem); font-weight: 600; letter-spacing: -0.01em; }
+.section-head p { margin-top: var(--s2); color: var(--text-muted); font-size: 1.05rem; }
+.section--ink .section-head p { color: var(--on-dark-muted); }
+
+.page-hero { background: var(--ink); color: var(--on-dark); padding-block: clamp(3rem, 7vw, 5rem); }
+.page-hero .eyebrow { color: var(--lime); }
+.page-hero h1 { font-size: clamp(2rem, 4.6vw, 3.2rem); font-weight: 600; letter-spacing: -0.015em; max-width: 22ch; }
+.page-hero p { margin-top: var(--s2); color: var(--on-dark-muted); max-width: 62ch; font-size: 1.05rem; }
+
+/* ---------- buttons ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+  min-height: 48px; padding: 0.7rem 1.4rem;
+  font-family: var(--font-head); font-size: 0.95rem; font-weight: 600; line-height: 1;
+  text-decoration: none; white-space: nowrap; cursor: pointer;
+  border: 2px solid transparent; border-radius: var(--radius);
+  transition: background-color 0.2s var(--ease), color 0.2s var(--ease), border-color 0.2s var(--ease), transform 0.2s var(--ease);
+}
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn--primary { background: var(--ink); color: #fff; }
+.btn--primary:hover { background: #2a313a; }
+.btn--lime { background: var(--lime); color: var(--ink); }
+.btn--lime:hover { background: #c1db52; }
+.btn--outline { background: transparent; color: var(--text); border-color: var(--text); }
+.btn--outline:hover { background: var(--text); color: #fff; }
+.dark .btn--outline, .section--ink .btn--outline { color: #fff; border-color: rgba(255, 255, 255, 0.4); }
+.dark .btn--outline:hover, .section--ink .btn--outline:hover { background: #fff; color: var(--ink); border-color: #fff; }
+.btn--sm { min-height: 44px; padding: 0.55rem 1.1rem; font-size: 0.9rem; }
+
+.link-arrow { display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 600; color: var(--lime-deep); text-decoration: none; }
+.link-arrow:hover { text-decoration: underline; text-underline-offset: 4px; }
+
+/* ---------- scroll reveal (subtle, off for reduced motion) ---------- */
+.reveal { opacity: 0; transform: translateY(14px); transition: opacity 0.5s var(--ease), transform 0.5s var(--ease); }
+.reveal.is-in { opacity: 1; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  .reveal { opacity: 1; transform: none; }
+}

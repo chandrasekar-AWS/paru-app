@@ -1,0 +1,9 @@
+node_modules
+dist
+.env
+.env.local
+.local-data
+generated-keys
+.vercel
+*.log
+.DS_Store

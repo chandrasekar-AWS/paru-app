@@ -1,0 +1,15 @@
+.ssl { width: 100%; }
+.ssl-frame { position: relative; width: 100%; border-radius: var(--radius-lg); overflow: hidden; background: var(--line); box-shadow: var(--shadow); }
+.ssl-panel { position: absolute; inset: 0; touch-action: pan-y; cursor: grab; user-select: none; -webkit-user-select: none; }
+.ssl-panel:active { cursor: grabbing; }
+.ssl-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; opacity: 0; transition: opacity 0.35s var(--ease); pointer-events: none; }
+.ssl-img--active { opacity: 1; }
+.ssl-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.92); color: var(--ink); cursor: pointer; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2); transition: background-color 0.2s var(--ease); }
+.ssl-nav:hover { background: #fff; }
+.ssl-nav--prev { left: 0.75rem; }
+.ssl-nav--next { right: 0.75rem; }
+.ssl-dots { display: flex; justify-content: center; gap: 0.25rem; margin-top: 0.5rem; }
+.ssl-dot { all: unset; box-sizing: border-box; cursor: pointer; width: 28px; height: 28px; display: grid; place-items: center; }
+.ssl-dot::after { content: ''; width: 9px; height: 9px; border-radius: 50%; background: #c3c1b7; transition: background-color 0.2s var(--ease), transform 0.2s var(--ease); }
+.ssl-dot--active::after { background: var(--ink); transform: scale(1.25); }
+.ssl-dot:focus-visible { outline: 3px solid var(--lime-deep); border-radius: 50%; }

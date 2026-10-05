@@ -1,0 +1,28 @@
+.svc-tabs-wrap { position: sticky; top: var(--header-h); z-index: 50; background: rgba(246, 245, 240, 0.96); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+.svc-tabs { display: flex; gap: 0.5rem; overflow-x: auto; padding-block: 0.6rem; scrollbar-width: none; }
+.svc-tabs::-webkit-scrollbar { display: none; }
+.svc-tab { all: unset; box-sizing: border-box; cursor: pointer; flex: 0 0 auto; min-height: 44px; display: inline-flex; align-items: center; padding: 0 1.1rem; border-radius: 999px; font-family: var(--font-head); font-size: 0.92rem; font-weight: 500; color: var(--text-muted); border: 1px solid transparent; transition: background-color 0.2s var(--ease), color 0.2s var(--ease); }
+.svc-tab:hover { color: var(--text); background: rgba(18, 21, 26, 0.05); }
+.svc-tab.is-on { background: var(--ink); color: #fff; }
+.svc-tab:focus-visible { outline: 3px solid var(--lime-deep); outline-offset: 2px; }
+
+.svc-box { padding-block: clamp(3rem, 7vw, 5rem); scroll-margin-top: calc(var(--header-h) + 64px); }
+.svc-box--alt { background: var(--card); }
+.svc-box__grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(2rem, 6vw, 5rem); align-items: center; }
+.svc-box--alt .svc-box__media { order: 2; }
+.svc-box__text h2 { font-size: clamp(1.8rem, 3.6vw, 2.6rem); font-weight: 600; letter-spacing: -0.01em; }
+.svc-box__desc { margin-top: var(--s2); color: var(--text-muted); font-size: 1.05rem; max-width: 56ch; }
+.svc-links { list-style: none; margin: var(--s3) 0; padding: 0; border-top: 1px solid var(--line); }
+.svc-links li { border-bottom: 1px solid var(--line); }
+.svc-links a { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 52px; font-weight: 600; text-decoration: none; transition: color 0.2s var(--ease), padding 0.2s var(--ease); }
+.svc-links a:hover { color: var(--lime-deep); padding-left: 0.4rem; }
+.svc-box__actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+
+.svc-closing__inner { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; }
+.svc-closing p { font-family: var(--font-head); font-size: clamp(1.15rem, 2.2vw, 1.5rem); font-weight: 500; max-width: 40ch; }
+
+@media (max-width: 860px) {
+  .svc-box__grid { grid-template-columns: 1fr; }
+  .svc-box--alt .svc-box__media { order: 0; }
+}
+@media (max-width: 480px) { .svc-box__actions .btn { flex: 1 1 100%; } }

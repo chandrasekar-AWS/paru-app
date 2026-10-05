@@ -1,0 +1,56 @@
+.site-header { position: sticky; top: 0; z-index: 100; background: var(--ink); border-bottom: 1px solid var(--ink-line); }
+.site-header__bar { display: flex; align-items: center; gap: var(--s4); height: var(--header-h); }
+.site-header__logo { display: flex; align-items: center; flex: 0 0 auto; }
+.site-header__logo img { height: 40px; width: auto; }
+
+.site-nav { flex: 1; display: flex; justify-content: center; }
+.site-nav > ul { display: flex; align-items: center; gap: 0.25rem; list-style: none; margin: 0; padding: 0; }
+.site-nav > ul > li { display: flex; align-items: center; }
+/* the menu centres on the whole header, not on its own list item */
+.site-nav__has-menu { position: static; }
+.site-nav__link {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 0.85rem;
+  color: var(--on-dark); font-family: var(--font-head); font-size: 0.95rem; font-weight: 500; text-decoration: none;
+  border-radius: 8px; transition: color 0.2s var(--ease), background-color 0.2s var(--ease);
+}
+.site-nav__link:hover { background: rgba(255, 255, 255, 0.07); }
+.site-nav__link.is-active { color: var(--lime); }
+.site-nav__has-menu .site-nav__link { padding-right: 0.25rem; }
+.site-nav__chev { all: unset; box-sizing: border-box; cursor: pointer; display: grid; place-items: center; width: 32px; height: 44px; color: var(--on-dark); border-radius: 8px; }
+.site-nav__chev:hover { background: rgba(255, 255, 255, 0.07); }
+.site-nav__chev:focus-visible { outline: 3px solid var(--lime); outline-offset: -2px; }
+.site-nav__chev[aria-expanded='true'] svg { transform: rotate(180deg); }
+.site-nav__chev svg { transition: transform 0.2s var(--ease); }
+
+/* services menu */
+.mega { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); padding-top: 14px; z-index: 110; }
+.mega__grid {
+  display: grid; grid-template-columns: repeat(4, minmax(170px, 1fr)); gap: var(--s4);
+  width: max-content; max-width: min(960px, calc(100vw - 2rem));
+  padding: var(--s4); background: var(--card); color: var(--text);
+  border-radius: var(--radius-lg); box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+  animation: mega-in 0.18s var(--ease);
+}
+@keyframes mega-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.mega__head { display: block; font-family: var(--font-head); font-weight: 600; font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lime-deep); text-decoration: none; padding-bottom: 0.6rem; margin-bottom: 0.4rem; border-bottom: 2px solid var(--lime); }
+.mega__col ul { list-style: none; margin: 0; padding: 0; }
+.mega__col li a { display: block; padding: 0.4rem 0; font-size: 0.92rem; color: var(--text); text-decoration: none; }
+.mega__col li a:hover { color: var(--lime-deep); text-decoration: underline; text-underline-offset: 3px; }
+
+.site-header__toggle { all: unset; display: none; box-sizing: border-box; cursor: pointer; width: 48px; height: 48px; place-items: center; color: #fff; border-radius: 8px; margin-left: auto; }
+.site-header__toggle:focus-visible { outline: 3px solid var(--lime); outline-offset: 2px; }
+
+.mobile-panel { position: fixed; inset: var(--header-h) 0 0 0; background: var(--ink); overflow-y: auto; padding: var(--s3) var(--gutter) var(--s5); animation: mega-in 0.2s var(--ease); }
+.mobile-panel ul { list-style: none; margin: 0; padding: 0; }
+.mobile-panel li a { display: flex; align-items: center; min-height: 52px; font-family: var(--font-head); font-size: 1.15rem; font-weight: 500; color: var(--on-dark); text-decoration: none; border-bottom: 1px solid var(--ink-line); }
+.mobile-panel li a.is-active { color: var(--lime); }
+.mobile-panel__label { margin: var(--s4) 0 0.25rem; font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--on-dark-muted); font-family: var(--font-head); font-weight: 600; }
+.mobile-panel__sub li a { font-size: 1rem; color: var(--on-dark-muted); min-height: 48px; }
+.mobile-panel__cta { width: 100%; margin-top: var(--s4); }
+
+@media (max-width: 960px) {
+  .site-nav, .site-header__cta { display: none; }
+  .site-header__toggle { display: grid; }
+  .site-header__logo img { height: 36px; }
+}
+@media (min-width: 961px) { .mobile-panel { display: none; } }

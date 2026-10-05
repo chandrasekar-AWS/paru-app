@@ -1,0 +1,211 @@
+.adm-page, .adm-login-page { min-height: 100vh; background: #08070b; color: #fff; }
+.adm-page * , .adm-login-page * { box-sizing: border-box; }
+.adm-top { display: flex; align-items: center; gap: 0.9rem; padding: 0.8rem 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.08); position: sticky; top: 0; background: #08070bee; backdrop-filter: blur(8px); z-index: 10; }
+.adm-top img { height: 34px; width: auto; }
+.adm-spacer, .adm-grow { flex: 1; }
+.adm-tabs { display: flex; gap: 0.5rem; padding: 1rem 1.5rem 0; flex-wrap: wrap; }
+.adm-tab { all: unset; cursor: pointer; padding: 0.5rem 1.2rem; border-radius: 999px; border: 1px solid rgba(255,255,255,0.14); color: rgba(255,255,255,0.7); font-size: 0.9rem; font-weight: 600; }
+.adm-tab--on { background: rgba(34, 238, 115,0.22); border-color: #22EE73; color: #fff; }
+.adm-main { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+.adm-card { background: #100e15; border: 1px solid rgba(255,255,255,0.09); border-radius: 16px; padding: 1.1rem 1.2rem; margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.7rem; }
+.adm-card h2 { margin: 0; font-size: 1.05rem; }
+.adm-row { display: flex; gap: 0.7rem; align-items: flex-end; flex-wrap: wrap; }
+.adm-page label, .adm-login-card label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.78rem; color: rgba(255,255,255,0.6); }
+.adm-page input, .adm-page select, .adm-page textarea, .adm-login-card input {
+  background: #0a090e; color: #fff; border: 1px solid rgba(255,255,255,0.16); border-radius: 10px;
+  padding: 0.55rem 0.75rem; font: inherit; font-size: 0.92rem; width: 100%;
+}
+.adm-row input, .adm-row select { width: auto; min-width: 140px; }
+.adm-row .adm-grow { min-width: 160px; }
+.adm-title { font-weight: 700; font-size: 1rem !important; }
+.adm-page textarea { resize: vertical; }
+.adm-btn { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.55rem 1rem; border-radius: 10px; border: 1px solid rgba(255,255,255,0.18); color: #fff; font-size: 0.86rem; font-weight: 600; white-space: nowrap; }
+.adm-btn:hover { background: rgba(255,255,255,0.08); }
+.adm-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.adm-btn--primary { background: linear-gradient(135deg, #17B857, #22EE73); border-color: transparent; color: #04140a; }
+.adm-btn--primary:hover { filter: brightness(1.1); background: linear-gradient(135deg, #17B857, #22EE73); }
+.adm-btn--danger { color: #fca5a5; border-color: rgba(248,113,113,0.4); }
+.adm-file { flex-direction: row !important; color: #fff !important; font-size: 0.86rem !important; }
+.adm-muted { color: rgba(255,255,255,0.5); font-size: 0.85rem; margin: 0; }
+.adm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 1rem; margin-top: 0.8rem; }
+.adm-item { background: #100e15; border: 1px solid rgba(255,255,255,0.09); border-radius: 14px; padding: 0.6rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.adm-item img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 10px; }
+.adm-actions { display: flex; gap: 0.5rem; justify-content: space-between; }
+.adm-list { display: flex; flex-direction: column; }
+.adm-thumbs { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+.adm-thumb { position: relative; width: 96px; height: 72px; border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,0.14); }
+.adm-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.adm-thumb button { all: unset; cursor: pointer; position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 50%; background: rgba(0,0,0,0.75); display: flex; align-items: center; justify-content: center; }
+.adm-thumb--add { display: flex !important; align-items: center; justify-content: center; cursor: pointer; border-style: dashed; color: rgba(255,255,255,0.6); }
+.adm-warn { margin: 1rem 1.5rem 0; padding: 0.75rem 1rem; border-radius: 12px; background: rgba(250,204,21,0.12); border: 1px solid rgba(250,204,21,0.4); color: #fde68a; font-size: 0.86rem; }
+.adm-warn code { background: rgba(0,0,0,0.4); padding: 1px 5px; border-radius: 4px; }
+.adm-pill { font-size: 0.72rem; padding: 0.25rem 0.65rem; border-radius: 999px; background: rgba(248,113,113,0.15); color: #fca5a5; }
+.adm-pill--ok { background: rgba(34, 238, 115,0.15); color: #86F7B0; }
+.adm-toast { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%); background: #17B857; color: #fff; padding: 0.7rem 1.3rem; border-radius: 12px; font-weight: 600; font-size: 0.9rem; z-index: 50; }
+.adm-toast--bad { background: #dc2626; }
+.adm-page a { color: #22EE73; }
+
+.adm-login-page { display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
+.adm-login-card { width: 100%; max-width: 380px; background: #100e15; border: 1px solid rgba(255,255,255,0.1); border-radius: 22px; padding: 2rem 1.8rem; display: flex; flex-direction: column; gap: 1rem; }
+.adm-login-card h1 { margin: 0; font-size: 1.25rem; display: flex; align-items: center; gap: 0.5rem; }
+.adm-login-logo { height: 40px; width: auto; align-self: flex-start; }
+.adm-login-card .adm-btn { justify-content: center; padding: 0.7rem; }
+.adm-error { margin: 0; color: #fca5a5; font-size: 0.85rem; }
+.adm-link { color: rgba(255,255,255,0.55); font-size: 0.85rem; text-decoration: none; text-align: center; }
+
+.adm-key { display: flex; flex-direction: column; gap: 0.4rem; }
+.adm-key-label { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: rgba(255,255,255,0.6); }
+.adm-keybox {
+  all: unset; cursor: pointer; box-sizing: border-box; display: flex; align-items: center; gap: 0.7rem;
+  padding: 0.85rem 1rem; border-radius: 12px; font-size: 0.9rem; color: rgba(255,255,255,0.75);
+  border: 1.5px dashed rgba(255,255,255,0.25); transition: border-color .2s, background .2s;
+}
+.adm-keybox:hover { border-color: #22EE73; }
+.adm-keybox--ok { border: 1.5px solid #22EE73; background: rgba(34, 238, 115,0.12); color: #86F7B0; }
+.adm-keybox--bad { border: 1.5px solid #ef4444; background: rgba(239,68,68,0.1); color: #fca5a5; }
+.adm-login-card input:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Step-by-step login ──────────────────────────────────────── */
+.adm-step-label { display: block; }
+.adm-input-wrap {
+  position: relative; display: flex; align-items: center;
+  border: 1px solid rgba(255,255,255,0.16); border-radius: 10px; background: #0a090e;
+  transition: border-color .2s;
+}
+.adm-input-wrap input {
+  border: none !important; background: transparent !important; flex: 1; min-width: 0;
+}
+.adm-input-wrap input:disabled { opacity: 0.45; cursor: not-allowed; }
+.adm-input-wrap--ok { border-color: #22EE73; }
+.adm-input-wrap--bad { border-color: #ef4444; }
+.adm-eye {
+  all: unset; cursor: pointer; display: flex; padding: 0 0.5rem; color: rgba(255,255,255,0.55);
+}
+.adm-eye:hover { color: #fff; }
+.adm-dot {
+  display: flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 50%; margin-right: 0.6rem; flex-shrink: 0;
+}
+.adm-dot--ok { background: #22EE73; color: #04140a; }
+.adm-dot--bad { background: #ef4444; color: #1a0505; }
+.adm-dot--busy {
+  width: 12px; height: 12px; margin-right: 0.66rem; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.25); border-top-color: #22EE73;
+  animation: adm-spin 0.7s linear infinite;
+}
+@keyframes adm-spin { to { transform: rotate(360deg); } }
+.adm-keybox:disabled { opacity: 0.45; cursor: not-allowed; }
+.adm-keybox--none { border-color: rgba(255,255,255,0.25); }
+
+/* ── Floating admin bar shown on the public site during an admin session ── */
+.adm-floatbar {
+  position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 999;
+  display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.6rem 0.5rem 0.9rem;
+  background: rgba(10,9,14,0.92); backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.14); border-radius: 999px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+}
+.adm-floatbar span { font-size: 0.8rem; color: rgba(255,255,255,0.65); white-space: nowrap; }
+.adm-floatbar .adm-btn { padding: 0.4rem 0.85rem; font-size: 0.8rem; }
+@media (max-width: 520px) {
+  .adm-floatbar { left: 12px; right: 12px; transform: none; bottom: 12px; }
+  .adm-floatbar span { display: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Admin login — glass card, aligned status slots, no blue focus box
+   ══════════════════════════════════════════════════════════════ */
+.adm-login-page {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(600px 420px at 18% 22%, rgba(34, 238, 115, 0.22), transparent 70%),
+    radial-gradient(560px 420px at 84% 78%, rgba(34, 238, 115, 0.14), transparent 70%),
+    radial-gradient(480px 360px at 78% 14%, rgba(120, 140, 255, 0.14), transparent 70%),
+    #08070b;
+}
+.adm-login-card {
+  position: relative;
+  z-index: 1;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.035));
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* No blue browser focus box anywhere in the login card */
+.adm-login-card input,
+.adm-login-card input:focus,
+.adm-login-card input:focus-visible,
+.adm-login-card button:focus,
+.adm-login-card button:focus-visible { outline: none !important; box-shadow: none; }
+
+/* Field = glass pill. Selecting it just lifts the border softly (no blue). */
+.adm-input-wrap {
+  height: 46px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+.adm-input-wrap:focus-within {
+  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.06);
+}
+.adm-input-wrap--ok, .adm-input-wrap--ok:focus-within { border-color: #22EE73; box-shadow: none; }
+.adm-input-wrap--bad, .adm-input-wrap--bad:focus-within { border-color: #ef4444; box-shadow: none; }
+.adm-input-wrap input {
+  height: 100%;
+  padding: 0 0.9rem;
+  border-radius: 10px;
+  line-height: 1;
+}
+.adm-input-wrap input::placeholder { color: rgba(255, 255, 255, 0.4); }
+
+/* Right-hand slot: spinner / tick / cross always sit in the same spot */
+.adm-slot {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  margin-right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.adm-slot .adm-dot,
+.adm-keybox-tick { margin: 0; }
+.adm-dot { width: 20px; height: 20px; }
+.adm-dot--ok { animation: adm-pop 0.28s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+.adm-dot--busy { width: 16px; height: 16px; margin: 0; animation: adm-spin 0.7s linear infinite; border-top-color: #22EE73; }
+@keyframes adm-pop { from { transform: scale(0.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.adm-eye {
+  width: 28px;
+  height: 28px;
+  margin-right: 4px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+/* Key file box */
+.adm-keybox {
+  position: relative;
+  overflow: hidden;
+  min-height: 54px;
+  background: rgba(255, 255, 255, 0.04);
+}
+.adm-keybox > svg { flex: 0 0 auto; }
+.adm-keybox > span:not(.adm-dot):not(.adm-spin-sm):not(.adm-progress) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-keybox--checking { border: 1.5px solid rgba(34, 238, 115, 0.55); background: rgba(34, 238, 115, 0.07); color: #fff; cursor: progress; }
+.adm-keybox--ok { border: 1.5px solid #22EE73; background: rgba(34, 238, 115, 0.12); color: #86F7B0; }
+.adm-spin-sm {
+  flex: 0 0 auto; width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25); border-top-color: #22EE73;
+  animation: adm-spin 0.7s linear infinite;
+}
+.adm-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255, 255, 255, 0.08); }
+.adm-progress > span { display: block; height: 100%; background: #22EE73; transition: width 0.45s ease; }

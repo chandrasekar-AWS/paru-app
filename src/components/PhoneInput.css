@@ -1,0 +1,24 @@
+.pi { position: relative; display: flex; align-items: stretch; }
+.pi-btn {
+  all: unset; box-sizing: border-box; cursor: pointer; flex: 0 0 auto; min-height: 48px;
+  display: flex; align-items: center; gap: 0.4rem; padding: 0 0.7rem 0 0.8rem;
+  background: #f1f0ea; border: 1.5px solid #c9c7bd; border-right: 0; border-radius: var(--radius) 0 0 var(--radius);
+  color: var(--text); font-size: 0.95rem; transition: border-color 0.2s var(--ease);
+}
+.pi-btn:hover, .pi-btn[aria-expanded='true'] { border-color: #9a9d98; }
+.pi-btn:focus-visible { outline: 3px solid var(--lime-deep); outline-offset: 1px; }
+.pi-code { font-variant-numeric: tabular-nums; }
+.pi .pi-input { flex: 1; min-width: 0; border-radius: 0 var(--radius) var(--radius) 0 !important; letter-spacing: 0.02em; font-variant-numeric: tabular-nums; }
+.pi--error .pi-btn, .pi--error .pi-input { border-color: var(--danger) !important; }
+.pi-flag { width: 22px; height: 16px; object-fit: cover; border-radius: 3px; flex: 0 0 auto; background: var(--line); }
+
+.pi-menu { position: absolute; z-index: 60; top: calc(100% + 6px); left: 0; width: min(340px, calc(100vw - 2rem)); overflow: hidden; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 16px 40px rgba(18, 21, 26, 0.18); }
+.pi-search { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.8rem; color: var(--text-muted); border-bottom: 1px solid var(--line); }
+.pi-search input { flex: 1; min-width: 0; background: transparent !important; border: 0 !important; outline: 0; box-shadow: none !important; color: var(--text); font: inherit; font-size: 0.95rem; padding: 0 !important; border-radius: 0 !important; min-height: 44px !important; }
+.pi-menu ul { list-style: none; margin: 0; padding: 4px; max-height: 280px; overflow-y: auto; overscroll-behavior: contain; }
+.pi-menu li button { all: unset; box-sizing: border-box; cursor: pointer; width: 100%; min-height: 44px; display: flex; align-items: center; gap: 0.65rem; padding: 0.4rem 0.65rem; border-radius: 8px; color: var(--text); font-size: 0.92rem; }
+.pi-menu li button:hover, .pi-menu li button:focus-visible { background: #f1f0ea; }
+.pi-menu li button.is-on { background: var(--lime-tint); }
+.pi-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pi-dial { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.pi-none { padding: 0.9rem; text-align: center; color: var(--text-muted); font-size: 0.9rem; }

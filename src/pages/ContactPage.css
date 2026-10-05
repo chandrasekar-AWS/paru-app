@@ -1,0 +1,52 @@
+/* Contact — optional service intro, then form + details */
+.contact-intro { padding-block: clamp(2rem, 5vw, 3.5rem); border-bottom: 1px solid var(--line); }
+.contact-back { display: inline-flex; align-items: center; gap: 0.4rem; min-height: 44px; margin-bottom: var(--s2); color: var(--text-muted); font-size: 0.92rem; font-weight: 600; text-decoration: none; }
+.contact-back:hover { color: var(--text); text-decoration: underline; text-underline-offset: 4px; }
+.contact-intro-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(2rem, 5vw, 4rem); align-items: center; }
+.contact-intro-grid:not(:has(.contact-intro-media)) { grid-template-columns: 1fr; max-width: 720px; }
+.contact-intro-text h1 { font-size: clamp(1.9rem, 3.8vw, 2.7rem); font-weight: 600; letter-spacing: -0.01em; }
+.contact-intro-desc { margin-top: var(--s2); color: var(--text-muted); font-size: 1.05rem; }
+.contact-intro-cta { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); }
+.contact-scroll-hint { display: inline-flex; align-items: center; gap: 0.35rem; color: var(--text-muted); font-size: 0.92rem; }
+
+.contact-body { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: clamp(2rem, 5vw, 4rem); align-items: start; scroll-margin-top: calc(var(--header-h) + 8px); }
+
+/* form */
+.contact-form { display: flex; flex-direction: column; gap: var(--s3); background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: clamp(1.25rem, 3vw, 2.25rem); position: relative; }
+.cf-row { display: grid; gap: var(--s3); }
+.cf-row--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.cf-field { display: flex; flex-direction: column; gap: 0.4rem; min-width: 0; }
+.cf-field label { font-size: 0.9rem; font-weight: 600; color: var(--text); }
+.cf-field input, .cf-field select, .cf-field textarea {
+  width: 100%; min-height: 48px; padding: 0.7rem 0.9rem;
+  font: inherit; font-size: 1rem; color: var(--text); background: #fff;
+  border: 1.5px solid #c9c7bd; border-radius: var(--radius);
+  transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+}
+.cf-field textarea { resize: vertical; min-height: 140px; line-height: 1.5; }
+.cf-field input::placeholder, .cf-field textarea::placeholder { color: #8a8f96; }
+.cf-field input:hover, .cf-field select:hover, .cf-field textarea:hover { border-color: #9a9d98; }
+.cf-field input:focus, .cf-field select:focus, .cf-field textarea:focus { outline: 0; border-color: var(--ink); box-shadow: 0 0 0 3px rgba(175, 204, 57, 0.55); }
+.cf-field select { appearance: none; padding-right: 2.5rem; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2314171a' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 0.85rem center; }
+.cf-field select:disabled { background-color: #f1f0ea; color: #8a8f96; cursor: not-allowed; }
+.cf-input--error, .cf-field .cf-input--error { border-color: var(--danger) !important; }
+.cf-error { color: var(--danger); font-size: 0.88rem; font-weight: 600; }
+.cf-submit { display: flex; }
+
+/* details card */
+.contact-details-col { position: sticky; top: calc(var(--header-h) + 24px); }
+.contact-detail-card { background: var(--ink); color: var(--on-dark); border-radius: var(--radius-lg); padding: var(--s4); display: flex; flex-direction: column; gap: 0.25rem; }
+.contact-details-heading { font-size: 1.25rem; font-weight: 600; margin-bottom: var(--s1); }
+.contact-detail-row { display: flex; align-items: center; gap: 0.8rem; min-height: 48px; color: var(--on-dark); text-decoration: none; word-break: break-word; }
+.contact-detail-row svg { flex: 0 0 auto; color: var(--lime); }
+.contact-detail-row:hover span { text-decoration: underline; text-underline-offset: 3px; }
+.contact-detail-row .wa-glow { color: var(--lime); }
+.contact-detail-divider { height: 1px; background: var(--ink-line); margin: var(--s2) 0; }
+.contact-socials-label { font-size: 0.8rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--on-dark-muted); margin-bottom: var(--s1); }
+.contact-socials { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+
+@media (max-width: 900px) {
+  .contact-body, .contact-intro-grid { grid-template-columns: 1fr; }
+  .contact-details-col { position: static; }
+}
+@media (max-width: 560px) { .cf-row--2 { grid-template-columns: 1fr; } .cf-submit .btn { width: 100%; } }
